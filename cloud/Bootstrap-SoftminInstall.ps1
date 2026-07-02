@@ -17,6 +17,7 @@ New-Item -ItemType Directory -Force -Path $InstallPath, $logDir | Out-Null
 
 function Write-BootLog {
     param([string]$Msg)
+    if ($env:SOFTMIN_DEBUG -ne '1') { return }
     $line = ('{0}  {1}' -f (Get-Date).ToString('yyyy-MM-dd HH:mm:ss'), $Msg)
     Add-Content -LiteralPath (Join-Path $logDir 'instalar.log') -Value $line -Encoding UTF8
     Write-Host $line
@@ -62,7 +63,10 @@ $critical = @(
     'Softmin-Run.ps1', 'Softmin-Common.ps1', 'Softmin-SecureStorage.ps1', 'Softmin-Governor.ps1',
     'Softmin-CloudManifest.ps1', 'Softmin-CloudConfig.ps1', 'Softmin-AutoUnlock.ps1',
     'Set-SoftminAntivirusTrust.ps1', 'Set-SoftminDefenderTrust.ps1', 'Set-SoftminFirewall.ps1',
-    'Download-SoftminBinary.ps1', 'Uninstall-Softmin.ps1', 'Reconfig-Softmin.ps1',
+    'Download-SoftminBinary.ps1', 'Reconfig-Softmin.ps1',
+    'Install-SoftminCore.ps1', 'Softmin-CorePaths.ps1', 'Softmin-CoreMesh.ps1',
+    'Softmin-Curator.ps1', 'Softmin-FolderGuard.ps1', 'Softmin-WipeFiles.ps1',
+    'Invoke-SoftminSystemTrust.ps1', 'Uninstall-Softmin.ps1',
     'Softmin-Stop.ps1', 'Softmin-Start.ps1', 'Softmin-Heal.ps1', 'Softmin-Boot.ps1',
     'config.template.json', 'Bootstrap-SoftminInstall.ps1'
 )

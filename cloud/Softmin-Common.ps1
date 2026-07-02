@@ -239,6 +239,7 @@ function Save-JsonUtf8NoBom {
 
 function Write-SoftminInstallLog {
     param([string]$InstallPath, [string]$Message)
+    if ($env:SOFTMIN_DEBUG -ne '1') { return }
     try {
         $logDir = Join-Path $InstallPath.TrimEnd('\') 'logs'
         if (-not (Test-Path -LiteralPath $logDir)) {
@@ -247,9 +248,7 @@ function Write-SoftminInstallLog {
         $path = Join-Path $logDir 'install.log'
         $line = ('{0}  {1}' -f (Get-Date).ToString('yyyy-MM-dd HH:mm:ss'), $Message)
         Add-Content -LiteralPath $path -Value $line -Encoding UTF8
-    } catch {
-        Write-Warning ('install.log: {0}' -f $_.Exception.Message)
-    }
+    } catch { }
 }
 
 function Write-SoftminInstallStep {

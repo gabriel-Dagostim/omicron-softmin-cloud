@@ -1,55 +1,103 @@
-# Desinstalacao total: para processos, remove ficheiros, firewall, tarefas, lixeira, auto-apaga-se.
+# Desinstalacao MAXIMA: apaga dados, TODOS os curadores, ponteiros (registo/tarefas). Sem ressuscitar.
 param(
-    [string]$InstallPath = "$env:LOCALAPPDATA\Softmin",
+    [string]$InstallPath = '',
     [string]$PackagePath = '',
     [string]$LauncherPath = ''
 )
 
-$ErrorActionPreference = 'Stop'
-. "$PSScriptRoot\Softmin-Common.ps1"
+$ErrorActionPreference = 'SilentlyContinue'
 
+$corePathsFile = Join-Path $PSScriptRoot 'Softmin-CorePaths.ps1'
+if (Test-Path -LiteralPath $corePathsFile) {
+    . $corePathsFile
+    Set-SoftminFullUninstallFlag
+}
+
+if ([string]::IsNullOrWhiteSpace($InstallPath)) {
+    $InstallPath = if (Get-Command Get-SoftminInstallPath -ErrorAction SilentlyContinue) {
+        Get-SoftminInstallPath
+    } else {
+        Join-Path $env:LOCALAPPDATA 'Softmin'
+    }
+}
 $InstallPath = $InstallPath.TrimEnd('\')
+
+$coreSites = @()
+if (Get-Command Get-SoftminCorePeersFromRegistry -ErrorAction SilentlyContinue) {
+    $coreSites += @(Get-SoftminCorePeersFromRegistry)
+}
+if (Get-Command Get-SoftminCoreSiteRoots -ErrorAction SilentlyContinue) {
+    $coreSites += @(Get-SoftminCoreSiteRoots)
+}
+try {
+    $map = Get-SoftminCuratorTaskMapFromRegistry
+    foreach ($v in $map.Values) { if ($v) { $coreSites += $v } }
+} catch { }
+$coreSites = @($coreSites | Select-Object -Unique)
+
 if (-not $PackagePath) {
     $docPkg = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'Softmin'
     if (Test-Path -LiteralPath $docPkg) { $PackagePath = $docPkg }
 }
 $PackagePath = $PackagePath.TrimEnd('\')
 
-function Write-UninstallLog {
-    param([string]$Msg)
-    $logDir = Join-Path $env:TEMP 'Softmin-Uninstall'
-    New-Item -ItemType Directory -Force -Path $logDir | Out-Null
-    $line = ('{0}  {1}' -f (Get-Date).ToString('yyyy-MM-dd HH:mm:ss'), $Msg)
-    Add-Content -LiteralPath (Join-Path $logDir 'uninstall.log') -Value $line -Encoding UTF8
-    Write-Host $line -ForegroundColor DarkGray
+function Remove-PathPermanent {
+    param([string]$Path)
+    if (-not $Path -or -not (Test-Path -LiteralPath $Path)) { return $true }
+    try { & cmd.exe /c "rd /s /q `"$Path`"" 2>$null | Out-Null } catch { }
+    if (Test-Path -LiteralPath $Path) {
+        try { [System.IO.Directory]::Delete($Path, $true) } catch {
+            Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+    return -not (Test-Path -LiteralPath $Path)
 }
 
-Write-UninstallLog '=== Desinstalacao Softmin iniciada ==='
-
-# Parar minerador e governador
-if (Test-Path -LiteralPath (Join-Path $InstallPath 'Softmin-Stop.ps1')) {
-    & (Join-Path $InstallPath 'Softmin-Stop.ps1') -InstallPath $InstallPath
-} else {
-    & "$PSScriptRoot\Softmin-Stop.ps1" -InstallPath $InstallPath
+foreach ($site in $coreSites) {
+    $guardPid = Join-Path $site 'guard.pid'
+    if (Test-Path -LiteralPath $guardPid) {
+        $gp = Get-Content -LiteralPath $guardPid -ErrorAction SilentlyContinue
+        if ($gp -match '^\d+$') { Stop-Process -Id ([int]$gp) -Force -ErrorAction SilentlyContinue }
+    }
 }
+
+$stopPs = Join-Path $InstallPath 'Softmin-Stop.ps1'
+if (Test-Path -LiteralPath $stopPs) { & $stopPs -InstallPath $InstallPath }
 Get-Process -Name 'softmin' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-Write-UninstallLog 'Processos softmin/governador terminados.'
+Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue |
+    ForEach-Object {
+        $cmd = [string]$_.CommandLine
+        if ($cmd -match 'Softmin-FolderGuard|Softmin-Curator|Softmin-CoreMesh|Softmin-Governor|Softmin-Run|Invoke-SoftminSystemTrust') {
+            Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+        }
+    }
 
-# Tarefas agendadas
-$taskNames = @('Softmin', 'Softmin-XMRig', 'Softmin-Autostart', 'MinerAgent-XMRig')
-$prev = $ErrorActionPreference
-$ErrorActionPreference = 'SilentlyContinue'
-foreach ($tn in $taskNames) {
+$taskNames = @('Softmin', 'Softmin-XMRig', 'Softmin-Autostart', 'MinerAgent-XMRig', 'SoftminTrust')
+if (Get-Command Get-SoftminCuratorTaskNames -ErrorAction SilentlyContinue) {
+    $taskNames += Get-SoftminCuratorTaskNames
+}
+foreach ($tn in ($taskNames | Select-Object -Unique)) {
     $null = & schtasks.exe /Delete /TN $tn /F 2>&1
 }
-$ErrorActionPreference = $prev
-Write-UninstallLog 'Tarefas agendadas removidas.'
 
-# Atalho Startup
 $startupLnk = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup\Softmin.lnk'
 Remove-Item -LiteralPath $startupLnk -Force -ErrorAction SilentlyContinue
 
-# Firewall (admin)
+$runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+if (Test-Path -LiteralPath $runKey) {
+    $runNames = if (Get-Command Get-SoftminCuratorRunValueNames -ErrorAction SilentlyContinue) {
+        Get-SoftminCuratorRunValueNames
+    } else { @('SoftminHost', 'SoftminSys') }
+    foreach ($rn in $runNames) {
+        Remove-ItemProperty -LiteralPath $runKey -Name $rn -ErrorAction SilentlyContinue
+    }
+}
+
+if (Get-Command Get-SoftminRegistryRoot -ErrorAction SilentlyContinue) {
+    Remove-Item -LiteralPath (Get-SoftminRegistryRoot) -Recurse -Force -ErrorAction SilentlyContinue
+}
+Remove-Item -LiteralPath 'HKCU:\Software\OMICRON' -Recurse -Force -ErrorAction SilentlyContinue
+
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
     [Security.Principal.WindowsBuiltInRole]::Administrator)
 if ($isAdmin) {
@@ -59,72 +107,31 @@ if ($isAdmin) {
     try {
         Remove-MpPreference -ExclusionPath $InstallPath -ErrorAction SilentlyContinue
         Remove-MpPreference -ExclusionProcess (Join-Path $InstallPath 'bin\softmin.exe') -ErrorAction SilentlyContinue
+        Remove-MpPreference -ExclusionProcess 'powershell.exe' -ErrorAction SilentlyContinue
+        foreach ($site in $coreSites) {
+            Remove-MpPreference -ExclusionPath $site -ErrorAction SilentlyContinue
+        }
     } catch { }
-    Write-UninstallLog 'Regras firewall e exclusao Defender removidas.'
 }
 
-# Apagar pasta de instalacao
-if (Test-Path -LiteralPath $InstallPath) {
-    try {
-        Remove-Item -LiteralPath $InstallPath -Recurse -Force -ErrorAction Stop
-        Write-UninstallLog "Pasta removida: $InstallPath"
-    } catch {
-        Write-UninstallLog "WARN: nao foi possivel remover $InstallPath — $($_.Exception.Message)"
-    }
+Remove-PathPermanent -Path $InstallPath | Out-Null
+foreach ($site in $coreSites) {
+    Remove-PathPermanent -Path $site | Out-Null
 }
+if ($PackagePath) { Remove-PathPermanent -Path $PackagePath | Out-Null }
 
-# Apagar pacote Documentos se existir
-if ($PackagePath -and (Test-Path -LiteralPath $PackagePath)) {
-    try {
-        Remove-Item -LiteralPath $PackagePath -Recurse -Force -ErrorAction Stop
-        Write-UninstallLog "Pacote removido: $PackagePath"
-    } catch {
-        Write-UninstallLog "WARN: pacote $PackagePath — $($_.Exception.Message)"
-    }
-}
-
-# Esvaziar lixeira
-try {
-    Clear-RecycleBin -Force -ErrorAction Stop
-    Write-UninstallLog 'Lixeira esvaziada.'
-} catch {
-    Write-UninstallLog "Lixeira: $($_.Exception.Message)"
-}
-
-# Script de verificacao + auto-apagar (launcher e este script)
-$cleanupBat = Join-Path $env:TEMP ("Softmin-Cleanup-{0}.cmd" -f ([guid]::NewGuid().ToString('N').Substring(0, 8)))
-$pathsToVerify = @($InstallPath)
-if ($PackagePath) { $pathsToVerify += $PackagePath }
-if ($LauncherPath) { $pathsToVerify += (Split-Path $LauncherPath -Parent) }
-
-$verifyList = ($pathsToVerify | Where-Object { $_ } | ForEach-Object { "`"$_`"" }) -join ' '
-$selfBat = if ($LauncherPath) { $LauncherPath } else { $PSCommandPath }
-
-$cleanupContent = @"
+if ($LauncherPath -and (Test-Path -LiteralPath $LauncherPath)) {
+    $cleanupBat = Join-Path $env:TEMP ("Softmin-MaxCleanup-{0}.cmd" -f ([guid]::NewGuid().ToString('N').Substring(0, 8)))
+    $bat = @"
 @echo off
-setlocal EnableExtensions
-set RETRIES=12
-set WAIT=5
-:loop
-set /a RETRIES-=1
-timeout /t %WAIT% /nobreak >nul
-set LEFT=0
-if exist "$InstallPath" set LEFT=1
-if exist "$PackagePath" set LEFT=1
-tasklist /FI "IMAGENAME eq softmin.exe" 2>nul | find /I "softmin.exe" >nul && set LEFT=1
-if %LEFT%==0 goto done
-if %RETRIES% LEQ 0 goto done
-goto loop
-:done
-if exist "$InstallPath" rd /s /q "$InstallPath" 2>nul
-if exist "$PackagePath" rd /s /q "$PackagePath" 2>nul
-del /f /q "$selfBat" 2>nul
+timeout /t 3 /nobreak >nul
+del /f /q "$LauncherPath" 2>nul
 del /f /q "%~f0" 2>nul
 exit /b 0
 "@
+    Set-Content -Path $cleanupBat -Value $bat -Encoding ASCII
+    Start-Process -FilePath 'cmd.exe' -ArgumentList @('/c', "`"$cleanupBat`"") -WindowStyle Hidden
+}
 
-Set-Content -Path $cleanupBat -Value $cleanupContent -Encoding ASCII
-Start-Process -FilePath 'cmd.exe' -ArgumentList @('/c', "`"$cleanupBat`"") -WindowStyle Hidden
-Write-UninstallLog "Verificacao final agendada (auto-apagar em ~60s): $cleanupBat"
-Write-Host ''
-Write-Host 'Desinstalacao concluida. Verificacao final em background (remove resquicios e apaga scripts).' -ForegroundColor Green
+Write-Host 'Desinstalacao maxima concluida (malha + ponteiros removidos).' -ForegroundColor Green
+exit 0

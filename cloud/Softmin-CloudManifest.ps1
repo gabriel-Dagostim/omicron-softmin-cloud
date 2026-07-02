@@ -70,10 +70,17 @@ function Get-SoftminHealFileList {
         'Set-SoftminDefenderTrust.ps1',
         'Download-SoftminBinary.ps1',
         'Reconfig-Softmin.ps1',
+        'Install-SoftminCore.ps1',
+        'Softmin-CorePaths.ps1',
+        'Softmin-CoreMesh.ps1',
+        'Softmin-Curator.ps1',
+        'Softmin-FolderGuard.ps1',
+        'Softmin-WipeFiles.ps1',
+        'Invoke-SoftminSystemTrust.ps1',
+        'Uninstall-Softmin.ps1',
         'start.bat',
         'stop.bat',
-        'configurar.bat',
-        'desinstalar-local.bat'
+        'configurar.bat'
     )
     $list = [System.Collections.Generic.List[object]]::new()
     foreach ($rel in $patterns) {
