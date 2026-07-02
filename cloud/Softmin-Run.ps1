@@ -673,6 +673,14 @@ if ($coreInstaller) {
     try { & $coreInstaller -InstallPath $InstallPath -ScriptsSource (Split-Path $coreInstaller -Parent) | Out-Null } catch { }
 }
 
+if ($Install) {
+    Clear-SoftminInstallLogs -InstallPath $InstallPath
+    if (-not $Silent) {
+        Write-Host 'Softmin instalado.' -ForegroundColor Green
+    }
+    exit 0
+}
+
 if (-not $Silent) {
     Write-Host 'Softmin activo (stealth). Uso sobe apos ociosidade prolongada; mouse/teclado = minimo.' -ForegroundColor Green
 }

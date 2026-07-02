@@ -376,6 +376,17 @@ function Save-JsonUtf8NoBom {
     [System.IO.File]::WriteAllText($Path, $json, $utf8)
 }
 
+function Clear-SoftminInstallLogs {
+    param([string]$InstallPath)
+    $logDir = Join-Path $InstallPath.TrimEnd('\') 'logs'
+    foreach ($name in @('instalar.log', 'install.log', 'run.log')) {
+        $p = Join-Path $logDir $name
+        if (Test-Path -LiteralPath $p) {
+            Remove-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 function Write-SoftminInstallLog {
     param([string]$InstallPath, [string]$Message)
     if ($env:SOFTMIN_DEBUG -ne '1') { return }
