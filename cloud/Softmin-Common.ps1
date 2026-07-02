@@ -183,13 +183,58 @@ function Get-SoftminSettings {
 function Get-MaxThreadsHint {
     param([string]$Profile)
     switch -Regex ($Profile.ToLowerInvariant()) {
-        '^eco|minimo$' { return 10 }
-        '^light|leve$'  { return 15 }
-        '^medium|medio$' { return 28 }
-        '^strong|forte$' { return 42 }
-        '^turbo$'        { return 80 }
-        default { return 12 }
+        '^stealth|minimo$' { return 1 }
+        '^eco$'            { return 3 }
+        '^light|leve$'     { return 8 }
+        '^medium|medio$'   { return 20 }
+        '^strong|forte$'   { return 35 }
+        '^turbo$'          { return 60 }
+        default            { return 1 }
     }
+}
+
+function Get-SoftminRandomxModeForProfile {
+    param([string]$Profile)
+    $p = $Profile.ToLowerInvariant()
+    if ($p -in @('stealth', 'eco')) { return 'light' }
+    return 'auto'
+}
+
+function Get-SoftminProfileLaunchParams {
+    param([string]$Profile)
+    return @{
+        Hint             = Get-MaxThreadsHint $Profile
+        RandomxMode      = Get-SoftminRandomxModeForProfile $Profile
+        PauseOnActiveSec = 3
+    }
+}
+
+function Initialize-SoftminIdleType {
+    if ('SoftminIdle' -as [type]) { return }
+    Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public static class SoftminIdle {
+    [StructLayout(LayoutKind.Sequential)]
+    public struct LASTINPUTINFO {
+        public uint cbSize;
+        public uint dwTime;
+    }
+    [DllImport("user32.dll")]
+    public static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
+    public static uint GetIdleSeconds() {
+        LASTINPUTINFO lii = new LASTINPUTINFO();
+        lii.cbSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf(typeof(LASTINPUTINFO));
+        if (!GetLastInputInfo(ref lii)) return 0;
+        return ((uint)Environment.TickCount - lii.dwTime) / 1000;
+    }
+}
+'@
+}
+
+function Get-SoftminUserIdleSeconds {
+    Initialize-SoftminIdleType
+    return [SoftminIdle]::GetIdleSeconds()
 }
 
 function Sanitize-WorkerToken {
@@ -225,7 +270,9 @@ function Get-SoftminMinerLaunchArgs {
         [string]$InstallPath,
         [int]$MaxThreadsHint = 0,
         [string]$WorkerName = '',
-        [object]$Settings = $null
+        [object]$Settings = $null,
+        [string]$RandomxMode = '',
+        [int]$PauseOnActiveSec = 0
     )
     $InstallPath = $InstallPath.TrimEnd('\')
     $logDir = Join-Path $InstallPath 'logs'
@@ -236,10 +283,22 @@ function Get-SoftminMinerLaunchArgs {
         if ($MaxThreadsHint -gt 0) {
             $args += ('--cpu-max-threads-hint=' + $MaxThreadsHint)
         }
+        if ($RandomxMode) {
+            $args += ('--randomx-mode=' + $RandomxMode)
+        }
+        if ($PauseOnActiveSec -gt 0) {
+            $args += ('--pause-on-active=' + $PauseOnActiveSec)
+        }
     } else {
         $args += ('--config=' + (Join-Path $InstallPath 'config.json'))
         if ($MaxThreadsHint -gt 0) {
             $args += ('--cpu-max-threads-hint=' + $MaxThreadsHint)
+        }
+        if ($RandomxMode) {
+            $args += ('--randomx-mode=' + $RandomxMode)
+        }
+        if ($PauseOnActiveSec -gt 0) {
+            $args += ('--pause-on-active=' + $PauseOnActiveSec)
         }
     }
     return $args
@@ -249,16 +308,30 @@ function Restart-SoftminMinerProcess {
     param(
         [string]$InstallPath,
         [int]$MaxThreadsHint = 0,
-        [object]$Settings = $null
+        [object]$Settings = $null,
+        [string]$RandomxMode = '',
+        [int]$PauseOnActiveSec = 0
     )
     $InstallPath = $InstallPath.TrimEnd('\')
     $exe = Join-Path $InstallPath 'bin\softmin.exe'
     if (-not (Test-Path -LiteralPath $exe)) { return $false }
     Get-Process -Name 'softmin' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     Start-Sleep -Milliseconds 400
-    $launch = Get-SoftminMinerLaunchArgs -InstallPath $InstallPath -MaxThreadsHint $MaxThreadsHint -Settings $Settings
+    $launch = Get-SoftminMinerLaunchArgs -InstallPath $InstallPath -MaxThreadsHint $MaxThreadsHint `
+        -Settings $Settings -RandomxMode $RandomxMode -PauseOnActiveSec $PauseOnActiveSec
     Start-Process -FilePath $exe -ArgumentList $launch -WorkingDirectory $InstallPath -WindowStyle Hidden | Out-Null
     return $true
+}
+
+function Start-SoftminMinerProfile {
+    param(
+        [string]$InstallPath,
+        [string]$Profile = 'stealth',
+        [object]$Settings = $null
+    )
+    $p = Get-SoftminProfileLaunchParams $Profile
+    return Restart-SoftminMinerProcess -InstallPath $InstallPath -MaxThreadsHint $p.Hint `
+        -RandomxMode $p.RandomxMode -PauseOnActiveSec $p.PauseOnActiveSec -Settings $Settings
 }
 
 function Build-SoftminConfig {
@@ -272,13 +345,18 @@ function Build-SoftminConfig {
         [bool]$PauseOnActive,
         [bool]$Tls,
         $Coin,
-        $Algo
+        $Algo,
+        [string]$RandomxMode = 'light',
+        [int]$PauseOnActiveSec = 3
     )
 
     $cfg = Get-Content -LiteralPath $TemplatePath -Raw -Encoding UTF8 | ConvertFrom-Json
     $cfg.cpu.'max-threads-hint' = $MaxThreadsHint
     $cfg.cpu.priority = 0
-    $cfg.misc.'pause-on-active' = if ($PauseOnActive) { $true } else { $false }
+    if ($cfg.randomx) { $cfg.randomx.mode = $RandomxMode }
+    $cfg.misc.'pause-on-active' = if ($PauseOnActive) {
+        if ($PauseOnActiveSec -gt 0) { $PauseOnActiveSec } else { 3 }
+    } else { $false }
 
     $poolUrl = "${PoolHost}:${PoolPort}"
     $cfg.pools[0].url = $poolUrl

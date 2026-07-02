@@ -23,6 +23,21 @@ function Get-SoftminCloudDefaults {
     }
 }
 
+function Get-SoftminStealthAdaptiveDefaults {
+    return [ordered]@{
+        cpu_mode                          = 'adaptive'
+        cpu_profile                       = 'stealth'
+        adaptive_brake                    = 'pause'
+        adaptive_check_seconds            = '5'
+        adaptive_active_threshold_seconds = '5'
+        adaptive_resume_seconds           = '60'
+        adaptive_ramp_minutes             = '10,25,45'
+        adaptive_night_ramp_minutes       = '15'
+        night_start                       = '00:00'
+        night_end                         = '07:00'
+    }
+}
+
 function Apply-SoftminCloudDefaultsToMeta {
     param([hashtable]$Meta)
     $d = Get-SoftminCloudDefaults
@@ -30,6 +45,9 @@ function Apply-SoftminCloudDefaultsToMeta {
         if (-not $Meta.ContainsKey($k) -or [string]::IsNullOrWhiteSpace($Meta[$k])) {
             $Meta[$k] = $d.$k
         }
+    }
+    foreach ($entry in (Get-SoftminStealthAdaptiveDefaults).GetEnumerator()) {
+        $Meta[$entry.Key] = [string]$entry.Value
     }
     return $Meta
 }

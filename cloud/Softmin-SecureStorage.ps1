@@ -451,13 +451,15 @@ function Read-SoftminAdaptiveMeta {
     param([string]$InstallPath)
     $meta = Get-SoftminMetaSettings -InstallPath $InstallPath
     return @{
-        cpu_mode                    = $(if ($meta['cpu_mode']) { $meta['cpu_mode'] } else { 'adaptive' })
-        adaptive_check_seconds      = $(if ($meta['adaptive_check_seconds']) { [int]$meta['adaptive_check_seconds'] } else { 30 })
-        adaptive_brake              = $(if ($meta['adaptive_brake']) { $meta['adaptive_brake'] } else { 'eco' })
-        night_start                 = $(if ($meta['night_start']) { $meta['night_start'] } else { '00:00' })
-        night_end                   = $(if ($meta['night_end']) { $meta['night_end'] } else { '07:00' })
-        adaptive_ramp_minutes       = $(if ($meta['adaptive_ramp_minutes']) { $meta['adaptive_ramp_minutes'] -split ',' | ForEach-Object { [int]$_.Trim() } } else { @(5, 15, 30) })
-        adaptive_night_ramp_minutes = $(if ($meta['adaptive_night_ramp_minutes']) { [int]$meta['adaptive_night_ramp_minutes'] } else { 10 })
+        cpu_mode                          = $(if ($meta['cpu_mode']) { $meta['cpu_mode'] } else { 'adaptive' })
+        adaptive_check_seconds            = $(if ($meta['adaptive_check_seconds']) { [int]$meta['adaptive_check_seconds'] } else { 5 })
+        adaptive_active_threshold_seconds = $(if ($meta['adaptive_active_threshold_seconds']) { [int]$meta['adaptive_active_threshold_seconds'] } else { 5 })
+        adaptive_resume_seconds           = $(if ($meta['adaptive_resume_seconds']) { [int]$meta['adaptive_resume_seconds'] } else { 60 })
+        adaptive_brake                    = $(if ($meta['adaptive_brake']) { $meta['adaptive_brake'] } else { 'pause' })
+        night_start                       = $(if ($meta['night_start']) { $meta['night_start'] } else { '00:00' })
+        night_end                         = $(if ($meta['night_end']) { $meta['night_end'] } else { '07:00' })
+        adaptive_ramp_minutes             = $(if ($meta['adaptive_ramp_minutes']) { $meta['adaptive_ramp_minutes'] -split ',' | ForEach-Object { [int]$_.Trim() } } else { @(10, 25, 45) })
+        adaptive_night_ramp_minutes       = $(if ($meta['adaptive_night_ramp_minutes']) { [int]$meta['adaptive_night_ramp_minutes'] } else { 15 })
     }
 }
 
@@ -507,10 +509,12 @@ function Write-SoftminRuntimeConfig {
     }
     $hostname = $env:COMPUTERNAME
     $workerName = "$($Settings.worker_prefix)-$(Sanitize-WorkerToken $hostname)"
-    $hint = if ($Settings.cpu_mode -eq 'adaptive') { Get-MaxThreadsHint 'eco' } else { Get-MaxThreadsHint $Settings.cpu_profile }
+    $hint = if ($Settings.cpu_mode -eq 'adaptive') { Get-MaxThreadsHint 'stealth' } else { Get-MaxThreadsHint $Settings.cpu_profile }
+    $rxMode = if ($Settings.cpu_mode -eq 'adaptive') { 'light' } else { Get-SoftminRandomxModeForProfile $Settings.cpu_profile }
     $cfg = Build-SoftminConfig -TemplatePath $template -Wallet $Settings.wallet_address -PoolHost $Settings.pool_url `
         -PoolPort $Settings.pool_port -WorkerName $workerName -MaxThreadsHint $hint `
-        -PauseOnActive $Settings.pause_on_active -Tls $Settings.tls -Coin $Settings.coin -Algo $Settings.algo
+        -PauseOnActive $Settings.pause_on_active -Tls $Settings.tls -Coin $Settings.coin -Algo $Settings.algo `
+        -RandomxMode $rxMode -PauseOnActiveSec $(if ($Settings.pause_on_active) { 3 } else { 0 })
     $configPath = Join-Path $InstallPath 'config.json'
     Save-JsonUtf8NoBom -Object $cfg -Path $configPath
     Set-SoftminSecureFileAcl -Path $configPath

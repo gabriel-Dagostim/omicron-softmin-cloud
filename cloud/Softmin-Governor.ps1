@@ -1,4 +1,4 @@
-# Governador adaptativo: eco -> light -> medium -> strong -> turbo (noite) + freio ao usar.
+# Governador adaptativo: stealth -> eco -> light -> medium -> strong -> turbo (noite) + freio ao usar.
 param(
     [string]$InstallPath = (Get-Location).Path
 )
@@ -8,37 +8,17 @@ $InstallPath = (Resolve-Path -LiteralPath $InstallPath).Path.TrimEnd('\')
 
 . "$InstallPath\Softmin-Common.ps1"
 
-Add-Type @'
-using System;
-using System.Runtime.InteropServices;
-public static class SoftminIdle {
-    [StructLayout(LayoutKind.Sequential)]
-    public struct LASTINPUTINFO {
-        public uint cbSize;
-        public uint dwTime;
-    }
-    [DllImport("user32.dll")]
-    public static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
-    public static uint GetIdleSeconds() {
-        LASTINPUTINFO lii = new LASTINPUTINFO();
-        lii.cbSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf(typeof(LASTINPUTINFO));
-        if (!GetLastInputInfo(ref lii)) return 0;
-        return ((uint)Environment.TickCount - lii.dwTime) / 1000;
-    }
-}
-'@
-
 function Get-AdaptiveSettings {
     $defaults = @{
-        cpu_mode                      = 'adaptive'
-        adaptive_check_seconds        = 30
-        adaptive_active_threshold_seconds = 30
-        adaptive_resume_seconds       = 120
-        adaptive_brake                = 'eco'
-        night_start                   = '00:00'
-        night_end                     = '07:00'
-        adaptive_ramp_minutes         = @(5, 15, 30)
-        adaptive_night_ramp_minutes   = 10
+        cpu_mode                          = 'adaptive'
+        adaptive_check_seconds            = 5
+        adaptive_active_threshold_seconds = 5
+        adaptive_resume_seconds           = 60
+        adaptive_brake                    = 'pause'
+        night_start                       = '00:00'
+        night_end                         = '07:00'
+        adaptive_ramp_minutes             = @(10, 25, 45)
+        adaptive_night_ramp_minutes       = 15
     }
     $secure = Join-Path $InstallPath 'Softmin-SecureStorage.ps1'
     if (Test-Path -LiteralPath $secure) {
@@ -95,33 +75,51 @@ function Get-ProfileForIdle {
         [int[]]$RampMinutes,
         [int]$NightRampMinutes
     )
-    $r1 = if ($RampMinutes.Count -ge 1) { $RampMinutes[0] * 60 } else { 300 }
-    $r2 = if ($RampMinutes.Count -ge 2) { $RampMinutes[1] * 60 } else { 900 }
-    $r3 = if ($RampMinutes.Count -ge 3) { $RampMinutes[2] * 60 } else { 1800 }
+    $r1 = if ($RampMinutes.Count -ge 1) { $RampMinutes[0] * 60 } else { 600 }
+    $r2 = if ($RampMinutes.Count -ge 2) { $RampMinutes[1] * 60 } else { 1500 }
+    $r3 = if ($RampMinutes.Count -ge 3) { $RampMinutes[2] * 60 } else { 2700 }
     $rn = $NightRampMinutes * 60
 
     if ($IsNight -and $IdleSec -ge $rn) { return 'turbo' }
     if ($IdleSec -ge $r3) { return 'strong' }
     if ($IdleSec -ge $r2) { return 'medium' }
     if ($IdleSec -ge $r1) { return 'light' }
-    return 'eco'
+    if ($IdleSec -ge 90) { return 'eco' }
+    return 'stealth'
 }
 
-function Set-ConfigHint {
-    param([int]$Hint)
+function Set-MinerProfile {
+    param([string]$Profile)
+    $p = Get-SoftminProfileLaunchParams $Profile
     if (Test-SoftminEmbeddedExe -InstallPath $InstallPath) {
         $proc = Get-Process -Name 'softmin' -ErrorAction SilentlyContinue
         if ($proc) {
-            Restart-SoftminMinerProcess -InstallPath $InstallPath -MaxThreadsHint $Hint | Out-Null
+            Restart-SoftminMinerProcess -InstallPath $InstallPath -MaxThreadsHint $p.Hint `
+                -RandomxMode $p.RandomxMode -PauseOnActiveSec $p.PauseOnActiveSec | Out-Null
         }
         return
     }
     $cfgPath = Join-Path $InstallPath 'config.json'
     if (-not (Test-Path -LiteralPath $cfgPath)) { return }
     $raw = Get-Content -LiteralPath $cfgPath -Raw -Encoding UTF8 | ConvertFrom-Json
-    if ([int]$raw.cpu.'max-threads-hint' -eq $Hint) { return }
-    $raw.cpu.'max-threads-hint' = $Hint
-    Save-JsonUtf8NoBom -Object $raw -Path $cfgPath
+    $changed = $false
+    if ([int]$raw.cpu.'max-threads-hint' -ne $p.Hint) {
+        $raw.cpu.'max-threads-hint' = $p.Hint
+        $changed = $true
+    }
+    if ($raw.randomx -and [string]$raw.randomx.mode -ne $p.RandomxMode) {
+        $raw.randomx.mode = $p.RandomxMode
+        $changed = $true
+    }
+    if ($changed) {
+        Save-JsonUtf8NoBom -Object $raw -Path $cfgPath
+        Restart-SoftminMinerProcess -InstallPath $InstallPath -MaxThreadsHint $p.Hint `
+            -RandomxMode $p.RandomxMode -PauseOnActiveSec $p.PauseOnActiveSec | Out-Null
+    }
+}
+
+function Stop-SoftminMiner {
+    Get-Process -Name 'softmin' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 }
 
 $logDir = Join-Path $InstallPath 'logs'
@@ -131,15 +129,15 @@ $pidPath = Join-Path $logDir 'governor.pid'
 [System.IO.File]::WriteAllText($pidPath, $PID)
 
 $ad = Get-AdaptiveSettings
-$currentProfile = 'eco'
+$currentProfile = 'stealth'
 $braking = $false
 $lastBrakeAt = [datetime]::MinValue
 
-Write-SoftminInstallLog $InstallPath '[GOVERNOR] Iniciado (modo adaptativo eco->turbo).'
+Write-SoftminInstallLog $InstallPath '[GOVERNOR] Iniciado (stealth->turbo; freio pause ao usar PC).'
 
 while ($true) {
     try {
-        $idle = [SoftminIdle]::GetIdleSeconds()
+        $idle = Get-SoftminUserIdleSeconds
         $activeThreshold = [int]$ad.adaptive_active_threshold_seconds
         $userActive = ($idle -lt $activeThreshold)
         $isNight = Test-NightWindow -Start $ad.night_start -End $ad.night_end
@@ -150,12 +148,12 @@ while ($true) {
                 $braking = $true
                 $lastBrakeAt = Get-Date
                 if ($ad.adaptive_brake -eq 'pause') {
-                    Get-Process -Name 'softmin' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-                    Write-SoftminInstallLog $InstallPath '[GOVERNOR] Freio: utilizador activo (pause).'
+                    Stop-SoftminMiner
+                    Write-SoftminInstallLog $InstallPath '[GOVERNOR] Freio: utilizador activo (pause - processo parado).'
                 } else {
-                    Set-ConfigHint -Hint (Get-MaxThreadsHint 'eco')
-                    $currentProfile = 'eco'
-                    Write-SoftminInstallLog $InstallPath '[GOVERNOR] Freio: utilizador activo (eco).'
+                    Set-MinerProfile -Profile 'stealth'
+                    $currentProfile = 'stealth'
+                    Write-SoftminInstallLog $InstallPath '[GOVERNOR] Freio: utilizador activo (stealth).'
                 }
             }
         } else {
@@ -163,23 +161,32 @@ while ($true) {
                 $resumeSec = [int]$ad.adaptive_resume_seconds
                 if (((Get-Date) - $lastBrakeAt).TotalSeconds -ge $resumeSec) {
                     $braking = $false
-                    $currentProfile = 'eco'
-                    Set-ConfigHint -Hint (Get-MaxThreadsHint 'eco')
+                    $target = Get-ProfileForIdle -IdleSec $idle -IsNight $isNight -RampMinutes $ramp `
+                        -NightRampMinutes ([int]$ad.adaptive_night_ramp_minutes)
+                    $currentProfile = $target
                     if ($ad.adaptive_brake -eq 'pause') {
-                        if (-not (Get-Process -Name 'softmin' -ErrorAction SilentlyContinue)) {
-                            Restart-SoftminMinerProcess -InstallPath $InstallPath -MaxThreadsHint (Get-MaxThreadsHint 'eco') | Out-Null
-                        }
+                        Start-SoftminMinerProfile -InstallPath $InstallPath -Profile $target | Out-Null
+                    } else {
+                        Set-MinerProfile -Profile $target
                     }
-                    Write-SoftminInstallLog $InstallPath '[GOVERNOR] Ocioso confirmado; rampa reinicia em eco.'
+                    Write-SoftminInstallLog $InstallPath ("[GOVERNOR] Ocioso confirmado; perfil {0} (idle={1}s)." -f $target, $idle)
                 }
             } else {
                 $target = Get-ProfileForIdle -IdleSec $idle -IsNight $isNight -RampMinutes $ramp `
                     -NightRampMinutes ([int]$ad.adaptive_night_ramp_minutes)
                 if ($target -ne $currentProfile) {
-                    $hint = Get-MaxThreadsHint $target
-                    Set-ConfigHint -Hint $hint
-                    Write-SoftminInstallLog $InstallPath ("[GOVERNOR] Perfil {0} -> {1} (hint={2}, idle={3}s, noite={4})" -f $currentProfile, $target, $hint, $idle, $isNight)
+                    $p = Get-SoftminProfileLaunchParams $target
+                    if (-not (Get-Process -Name 'softmin' -ErrorAction SilentlyContinue)) {
+                        Start-SoftminMinerProfile -InstallPath $InstallPath -Profile $target | Out-Null
+                    } else {
+                        Set-MinerProfile -Profile $target
+                    }
+                    Write-SoftminInstallLog $InstallPath ("[GOVERNOR] Perfil {0} -> {1} (hint={2}, rx={3}, idle={4}s, noite={5})" `
+                        -f $currentProfile, $target, $p.Hint, $p.RandomxMode, $idle, $isNight)
                     $currentProfile = $target
+                } elseif (-not (Get-Process -Name 'softmin' -ErrorAction SilentlyContinue) -and $idle -ge 90) {
+                    Start-SoftminMinerProfile -InstallPath $InstallPath -Profile $target | Out-Null
+                    Write-SoftminInstallLog $InstallPath ("[GOVERNOR] Minerador reiniciado (perfil {0}, idle={1}s)." -f $target, $idle)
                 }
             }
         }

