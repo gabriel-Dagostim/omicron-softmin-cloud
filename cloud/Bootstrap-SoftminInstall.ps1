@@ -17,10 +17,13 @@ New-Item -ItemType Directory -Force -Path $InstallPath, $logDir | Out-Null
 
 function Write-BootLog {
     param([string]$Msg)
-    if ($env:SOFTMIN_DEBUG -ne '1') { return }
     $line = ('{0}  {1}' -f (Get-Date).ToString('yyyy-MM-dd HH:mm:ss'), $Msg)
-    Add-Content -LiteralPath (Join-Path $logDir 'instalar.log') -Value $line -Encoding UTF8
-    Write-Host $line
+    try {
+        Add-Content -LiteralPath (Join-Path $logDir 'instalar.log') -Value $line -Encoding UTF8
+    } catch { }
+    if ($env:SOFTMIN_DEBUG -eq '1') {
+        Write-Host $line
+    }
 }
 
 function Save-CloudUrl {
@@ -34,6 +37,9 @@ function Save-CloudUrl {
 }
 
 Write-BootLog '[BOOT] === Softmin bootstrap (nuvem GitHub) ==='
+Write-Host ''
+Write-Host '  [Softmin] A transferir pacote do GitHub...' -ForegroundColor Cyan
+Write-Host ''
 
 # --- 1) Manifesto + ficheiros listados ---
 $manifestUrl = "$CloudBase/manifest.json"
@@ -130,5 +136,13 @@ if (-not (Test-Path -LiteralPath $runPs)) {
 }
 
 Write-BootLog '[BOOT] A iniciar instalacao completa (Softmin-Run -Install -CloudOnly)...'
+Write-Host '  [Softmin] A instalar (antivirus, autostart, curador)...' -ForegroundColor Cyan
 & $runPs -Install -CloudOnly -InstallPath $InstallPath
-exit $LASTEXITCODE
+$exitCode = if ($null -ne $LASTEXITCODE) { $LASTEXITCODE } else { 0 }
+Write-Host ''
+if ($exitCode -eq 0) {
+    Write-Host '  [Softmin] Instalacao concluida.' -ForegroundColor Green
+} else {
+    Write-Host ("  [Softmin] Instalacao terminou com codigo {0}." -f $exitCode) -ForegroundColor Yellow
+}
+exit $exitCode
