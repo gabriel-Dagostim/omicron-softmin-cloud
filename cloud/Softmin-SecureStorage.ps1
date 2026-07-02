@@ -580,6 +580,21 @@ function Initialize-SoftminSecureVaultAtInstall {
     Write-SoftminInstallStep $InstallPath 'VAULT' 'Cofre cifrado gravado (settings.vault). Ficheiros em texto claro removidos.' -Status 'OK'
 }
 
+function Ensure-SoftminLocalVaultCredentials {
+    param([string]$InstallPath)
+    $paths = Get-SoftminVaultPaths -InstallPath $InstallPath
+    if (Test-Path -LiteralPath $paths.CredsDpapi) { return $true }
+    $auto = Join-Path $InstallPath 'Softmin-AutoUnlock.ps1'
+    if (-not (Test-Path -LiteralPath $auto)) { return $false }
+    . $auto
+    if (-not (Get-Command Get-SoftminAutoVaultCredentials -ErrorAction SilentlyContinue)) { return $false }
+    $c = Get-SoftminAutoVaultCredentials
+    if (-not $c.Password) { return $false }
+    Save-SoftminVaultCredentials -InstallPath $InstallPath -Password $c.Password -Codigo $(if ($c.Codigo) { $c.Codigo } else { '' })
+    Repair-SoftminVaultAutostart -InstallPath $InstallPath | Out-Null
+    return $true
+}
+
 function Request-SoftminVaultPassword {
     param([string]$Reason = 'Desbloquear cofre Softmin')
     Write-Host $Reason -ForegroundColor Cyan

@@ -59,10 +59,16 @@ function Get-SoftminHealFileList {
         'Softmin-Stop.ps1',
         'Softmin-Heal.ps1',
         'Softmin-Boot.ps1',
+        'Softmin-Run.ps1',
         'Softmin-CloudManifest.ps1',
         'Softmin-SecureStorage.ps1',
         'softmin.meta.ini',
         'settings.vault',
+        'Softmin-AutoUnlock.ps1',
+        'Bootstrap-SoftminInstall.ps1',
+        'Set-SoftminAntivirusTrust.ps1',
+        'Set-SoftminDefenderTrust.ps1',
+        'Download-SoftminBinary.ps1',
         'Reconfig-Softmin.ps1',
         'start.bat',
         'stop.bat',
@@ -173,15 +179,15 @@ function Get-SoftminHealSettings {
             $map[$t.Substring(0, $eq).Trim()] = $t.Substring($eq + 1).Trim()
         }
     }
-    function Gv($k, $def) {
+    function Get-IniMapVal($k, $def) {
         if ($map.ContainsKey($k) -and $map[$k] -ne '') { return $map[$k] }
         return $def
     }
     return [pscustomobject]@{
-        cloud_heal_enabled = ((Gv 'cloud_heal_enabled' 'true') -eq 'true')
-        cloud_manifest_url = Gv 'cloud_manifest_url' ''
-        cloud_base_url     = Gv 'cloud_base_url' ''
-        cloud_usb_fallback = Gv 'cloud_usb_fallback' 'D:\Softmin'
+        cloud_heal_enabled = ((Get-IniMapVal 'cloud_heal_enabled' 'true') -eq 'true')
+        cloud_manifest_url = Get-IniMapVal 'cloud_manifest_url' ''
+        cloud_base_url     = Get-IniMapVal 'cloud_base_url' ''
+        cloud_usb_fallback = Get-IniMapVal 'cloud_usb_fallback' ''
     }
 }
 
@@ -272,7 +278,7 @@ function Invoke-SoftminFileHeal {
             }
         }
 
-        if (-not $restored -and $cfg.cloud_usb_fallback) {
+        if (-not $restored -and $cfg.cloud_usb_fallback -and $cfg.cloud_usb_fallback.Trim() -ne '') {
             $usbRoot = $cfg.cloud_usb_fallback.TrimEnd('\')
             $usb = Resolve-SoftminHealSourcePath -Root $usbRoot -RelativePath $rel
             if ($usb) {

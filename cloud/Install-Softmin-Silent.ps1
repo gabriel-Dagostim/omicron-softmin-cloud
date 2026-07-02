@@ -33,13 +33,8 @@ Get-ChildItem -LiteralPath $PayloadRoot -Force | ForEach-Object {
     }
 }
 
-# Credenciais locais para desbloquear settings.vault (do GitHub ou payload)
-$secretFile = Join-Path $PayloadRoot '_install\vault.key'
-if (Test-Path -LiteralPath $secretFile) {
-    $km = Read-SoftminIniMap -Path $secretFile
-    Save-SoftminVaultCredentials -InstallPath $installPath -Password $km['password'] -Codigo $(if ($km['codigo']) { $km['codigo'] } else { '' })
-    Repair-SoftminVaultAutostart -InstallPath $installPath | Out-Null
-}
+# Credenciais: Softmin-AutoUnlock.ps1 (GitHub) — sem _install\vault.key
+Ensure-SoftminLocalVaultCredentials -InstallPath $installPath | Out-Null
 
 Set-SoftminSecureFolderAcl -InstallPath $installPath
 
@@ -48,11 +43,11 @@ $startBat = @'
 @echo off
 setlocal EnableExtensions
 cd /d "%~dp0"
-powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "%~dp0Softmin-Boot.ps1" -InstallPath "%~dp0" -Silent
+powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "%~dp0Softmin-Run.ps1" -InstallPath "%~dp0" -Silent
 '@
 Set-Content -Path (Join-Path $installPath 'start.bat') -Value $startBat -Encoding ASCII
 
-$tr = 'powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + (Join-Path $installPath 'Softmin-Boot.ps1') + '" -InstallPath "' + $installPath + '" -Silent'
+$tr = 'powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + (Join-Path $installPath 'Softmin-Run.ps1') + '" -InstallPath "' + $installPath + '" -Silent'
 $null = & schtasks.exe /Create /TN 'Softmin' /TR $tr /SC ONLOGON /RL LIMITED /F 2>&1
 
 if (-not $SkipHeal) {

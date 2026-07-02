@@ -1,0 +1,19 @@
+Softmin — pasta bin (OMICRON)
+================================
+
+Empresa: OMICRON
+Autor:   Pedro Piovezan - GHOST
+
+Precisa de **softmin.exe** (compilado localmente com a sua logo ou descarregado).
+
+A) Branding completo + compilacao (recomendado)
+   Na raiz: aplicar-branding.bat
+   Usa Minha-Logo.png -> icone + version.h + bin\softmin.exe
+
+B) So compilar
+   compilar-softmin.bat
+
+C) Descarga rapida (binario upstream — icone XMRig, sem branding OMICRON)
+   baixar-softmin.bat
+
+Nao use nomes de ficheiros que imitem componentes do Windows.

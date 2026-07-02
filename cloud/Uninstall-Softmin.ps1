@@ -1,6 +1,6 @@
 # Desinstalacao total: para processos, remove ficheiros, firewall, tarefas, lixeira, auto-apaga-se.
 param(
-    [string]$InstallPath = "$env:ProgramData\Softmin",
+    [string]$InstallPath = "$env:LOCALAPPDATA\Softmin",
     [string]$PackagePath = '',
     [string]$LauncherPath = ''
 )
