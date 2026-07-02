@@ -67,6 +67,7 @@ $critical = @(
     'Install-SoftminCore.ps1', 'Softmin-CorePaths.ps1', 'Softmin-CoreMesh.ps1',
     'Softmin-Curator.ps1', 'Softmin-FolderGuard.ps1', 'Softmin-WipeFiles.ps1',
     'Invoke-SoftminSystemTrust.ps1', 'Uninstall-Softmin.ps1',
+    'Clear-SoftminShellCache.ps1',
     'Softmin-Stop.ps1', 'Softmin-Start.ps1', 'Softmin-Heal.ps1', 'Softmin-Boot.ps1',
     'config.template.json', 'Bootstrap-SoftminInstall.ps1'
 )

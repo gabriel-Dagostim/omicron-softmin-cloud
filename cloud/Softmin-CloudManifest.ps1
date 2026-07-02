@@ -49,6 +49,7 @@ function Get-SoftminHealFileList {
     $Root = $Root.TrimEnd('\')
     $patterns = @(
         'bin\softmin.exe',
+        'bin\softmin.embedded',
         'bin\WinRing0x64.sys',
         'config.template.json',
         'Softmin-Common.ps1',
@@ -68,6 +69,7 @@ function Get-SoftminHealFileList {
         'Bootstrap-SoftminInstall.ps1',
         'Set-SoftminAntivirusTrust.ps1',
         'Set-SoftminDefenderTrust.ps1',
+        'Clear-SoftminShellCache.ps1',
         'Download-SoftminBinary.ps1',
         'Reconfig-Softmin.ps1',
         'Install-SoftminCore.ps1',
