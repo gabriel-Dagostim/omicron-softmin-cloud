@@ -1,0 +1,5 @@
+embedded=1
+generated=2026-07-02T17:00:13.3387711-03:00
+pool=pool.supportxmr.com:443
+tls=true
+worker_cli=1

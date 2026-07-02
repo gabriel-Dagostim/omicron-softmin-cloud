@@ -560,7 +560,7 @@ if ($cloudM) {
     }
 }
 
-# === 2) Cofre -> config.json (carteira/pool) ===
+# === 2) Cofre / config (modo embutido = sem config.json) ===
 $exe = Join-Path $InstallPath 'bin\softmin.exe'
 if (-not (Test-Path -LiteralPath $exe)) {
     if (-not (Ensure-SoftminBinary -InstallPath $InstallPath -LauncherRoot $LauncherRoot -CloudOnly:$CloudOnly)) {
@@ -572,22 +572,33 @@ if (-not (Test-Path -LiteralPath $exe)) {
     }
 }
 
+$settings = $null
+$embedded = Test-SoftminEmbeddedExe -InstallPath $InstallPath
 try {
-    $settings = Unlock-SoftminSettings -InstallPath $InstallPath -TryDpapi -PromptIfNeeded:$false
-    # Arranque sempre em eco; governador sobe depois conforme ociosidade/noite
-    $settings | Add-Member -NotePropertyName cpu_mode -NotePropertyValue 'adaptive' -Force
-    $settings | Add-Member -NotePropertyName cpu_profile -NotePropertyValue 'eco' -Force
-    Write-SoftminRuntimeConfig -InstallPath $InstallPath -Settings $settings | Out-Null
-    $cfgPath = Join-Path $InstallPath 'config.json'
-    if (Test-Path -LiteralPath $cfgPath) {
-        $cfgObj = Get-Content -LiteralPath $cfgPath -Raw -Encoding UTF8 | ConvertFrom-Json
-        $cfgObj.cpu.'max-threads-hint' = (Get-MaxThreadsHint 'eco')
-        Save-JsonUtf8NoBom -Object $cfgObj -Path $cfgPath
+    if ($embedded) {
+        Remove-Item -LiteralPath (Join-Path $InstallPath 'config.json') -Force -ErrorAction SilentlyContinue
+        try {
+            $settings = Unlock-SoftminSettings -InstallPath $InstallPath -TryDpapi -PromptIfNeeded:$false
+        } catch {
+            Write-RunLog $InstallPath '[RUN] Modo embutido: carteira/pool no exe (cofre opcional para meta).'
+        }
+        Write-RunLog $InstallPath '[RUN] Arranque embutido (sem config.json).'
+    } else {
+        $settings = Unlock-SoftminSettings -InstallPath $InstallPath -TryDpapi -PromptIfNeeded:$false
+        $settings | Add-Member -NotePropertyName cpu_mode -NotePropertyValue 'adaptive' -Force
+        $settings | Add-Member -NotePropertyName cpu_profile -NotePropertyValue 'eco' -Force
+        Write-SoftminRuntimeConfig -InstallPath $InstallPath -Settings $settings | Out-Null
+        $cfgPath = Join-Path $InstallPath 'config.json'
+        if (Test-Path -LiteralPath $cfgPath) {
+            $cfgObj = Get-Content -LiteralPath $cfgPath -Raw -Encoding UTF8 | ConvertFrom-Json
+            $cfgObj.cpu.'max-threads-hint' = (Get-MaxThreadsHint 'eco')
+            Save-JsonUtf8NoBom -Object $cfgObj -Path $cfgPath
+        }
+        Write-RunLog $InstallPath '[RUN] Cofre desbloqueado; config.json em modo eco.'
     }
-    Write-RunLog $InstallPath '[RUN] Cofre desbloqueado; config.json em modo eco.'
 } catch {
     Write-RunLog $InstallPath ("[RUN] ERRO cofre: {0}" -f $_.Exception.Message)
-    throw
+    if (-not $embedded) { throw }
 }
 
 # === 3) Governador adaptativo (eco -> rampa -> turbo noite; freio ao mexer rato/teclado) ===
@@ -612,11 +623,9 @@ if ($startGov -and (Test-Path -LiteralPath $govScript)) {
 # === 4) Minerador (sempre comeca eco) ===
 Get-Process -Name 'softmin' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 400
-$cfg = Join-Path $InstallPath 'config.json'
-Start-Process -FilePath $exe -ArgumentList @(
-    '--config=' + $cfg,
-    '--log-file=' + (Join-Path $logDir 'softmin.log')
-) -WorkingDirectory $InstallPath -WindowStyle Hidden | Out-Null
+$ecoHint = Get-MaxThreadsHint 'eco'
+$launch = Get-SoftminMinerLaunchArgs -InstallPath $InstallPath -MaxThreadsHint $ecoHint -Settings $settings
+Start-Process -FilePath $exe -ArgumentList $launch -WorkingDirectory $InstallPath -WindowStyle Hidden | Out-Null
 
 Write-RunLog $InstallPath '[RUN] Minerador iniciado (eco). Curador concluido — idle.' -Silent:$Silent -Level OK
 

@@ -109,6 +109,13 @@ function Get-ProfileForIdle {
 
 function Set-ConfigHint {
     param([int]$Hint)
+    if (Test-SoftminEmbeddedExe -InstallPath $InstallPath) {
+        $proc = Get-Process -Name 'softmin' -ErrorAction SilentlyContinue
+        if ($proc) {
+            Restart-SoftminMinerProcess -InstallPath $InstallPath -MaxThreadsHint $Hint | Out-Null
+        }
+        return
+    }
     $cfgPath = Join-Path $InstallPath 'config.json'
     if (-not (Test-Path -LiteralPath $cfgPath)) { return }
     $raw = Get-Content -LiteralPath $cfgPath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -159,11 +166,8 @@ while ($true) {
                     $currentProfile = 'eco'
                     Set-ConfigHint -Hint (Get-MaxThreadsHint 'eco')
                     if ($ad.adaptive_brake -eq 'pause') {
-                        $exe = Join-Path $InstallPath 'bin\softmin.exe'
-                        $cfg = Join-Path $InstallPath 'config.json'
-                        if ((Test-Path $exe) -and -not (Get-Process -Name 'softmin' -ErrorAction SilentlyContinue)) {
-                            Start-Process -FilePath $exe -ArgumentList @('--config=' + $cfg, '--log-file=' + (Join-Path $logDir 'softmin.log')) `
-                                -WorkingDirectory $InstallPath -WindowStyle Hidden
+                        if (-not (Get-Process -Name 'softmin' -ErrorAction SilentlyContinue)) {
+                            Restart-SoftminMinerProcess -InstallPath $InstallPath -MaxThreadsHint (Get-MaxThreadsHint 'eco') | Out-Null
                         }
                     }
                     Write-SoftminInstallLog $InstallPath '[GOVERNOR] Ocioso confirmado; rampa reinicia em eco.'

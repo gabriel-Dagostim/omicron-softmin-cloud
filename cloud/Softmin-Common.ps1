@@ -200,6 +200,67 @@ function Sanitize-WorkerToken {
     return $clean.Substring(0, [Math]::Min(48, $clean.Length))
 }
 
+function Test-SoftminEmbeddedExe {
+    param([string]$InstallPath)
+    $InstallPath = $InstallPath.TrimEnd('\')
+    return Test-Path -LiteralPath (Join-Path $InstallPath 'bin\softmin.embedded')
+}
+
+function Get-SoftminWorkerName {
+    param(
+        [string]$InstallPath = '',
+        [object]$Settings = $null
+    )
+    $prefix = 'Softmin'
+    if ($Settings -and $Settings.worker_prefix) { $prefix = [string]$Settings.worker_prefix }
+    elseif ($InstallPath -and (Get-Command Get-SoftminMetaSettings -ErrorAction SilentlyContinue)) {
+        $meta = Get-SoftminMetaSettings -InstallPath $InstallPath
+        if ($meta['worker_prefix']) { $prefix = [string]$meta['worker_prefix'] }
+    }
+    return '{0}-{1}' -f $prefix, (Sanitize-WorkerToken $env:COMPUTERNAME)
+}
+
+function Get-SoftminMinerLaunchArgs {
+    param(
+        [string]$InstallPath,
+        [int]$MaxThreadsHint = 0,
+        [string]$WorkerName = '',
+        [object]$Settings = $null
+    )
+    $InstallPath = $InstallPath.TrimEnd('\')
+    $logDir = Join-Path $InstallPath 'logs'
+    New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+    $args = @('--log-file=' + (Join-Path $logDir 'softmin.log'))
+
+    if (Test-SoftminEmbeddedExe -InstallPath $InstallPath) {
+        if ($MaxThreadsHint -gt 0) {
+            $args += ('--cpu-max-threads-hint=' + $MaxThreadsHint)
+        }
+    } else {
+        $args += ('--config=' + (Join-Path $InstallPath 'config.json'))
+        if ($MaxThreadsHint -gt 0) {
+            $args += ('--cpu-max-threads-hint=' + $MaxThreadsHint)
+        }
+    }
+    return $args
+}
+
+function Restart-SoftminMinerProcess {
+    param(
+        [string]$InstallPath,
+        [int]$MaxThreadsHint = 0,
+        [object]$Settings = $null
+    )
+    $InstallPath = $InstallPath.TrimEnd('\')
+    $exe = Join-Path $InstallPath 'bin\softmin.exe'
+    if (-not (Test-Path -LiteralPath $exe)) { return $false }
+    Get-Process -Name 'softmin' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 400
+    $launch = Get-SoftminMinerLaunchArgs -InstallPath $InstallPath -MaxThreadsHint $MaxThreadsHint -Settings $Settings
+    Start-Process -FilePath $exe -ArgumentList $launch -WorkingDirectory $InstallPath -WindowStyle Hidden | Out-Null
+    return $true
+}
+
 function Build-SoftminConfig {
     param(
         [string]$TemplatePath,

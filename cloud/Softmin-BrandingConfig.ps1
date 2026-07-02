@@ -5,9 +5,10 @@ function Get-SoftminBranding {
     [ordered]@{
         ProductName    = 'Softmin'
         CompanyName    = 'OMICRON'
+        SiteUrl        = 'www.softmin.com'
         Author         = 'Pedro Piovezan - GHOST'
         Copyright      = 'Copyright (C) 2026 OMICRON - Pedro Piovezan - GHOST'
-        ProductDesc    = 'Softmin - minerador de CPU | OMICRON'
+        ProductDesc    = 'Softmin - minerador CPU | www.softmin.com'
         AppId          = 'softmin'
         AppVersion     = '6.26.0'
         ExeName        = 'softmin.exe'

@@ -24,15 +24,23 @@ else {
     }
 }
 
+$settings = $null
 try {
     $settings = Unlock-SoftminSettings -InstallPath $InstallPath -TryDpapi -PromptIfNeeded
-    Write-SoftminRuntimeConfig -InstallPath $InstallPath -Settings $settings | Out-Null
+    if (Test-SoftminEmbeddedExe -InstallPath $InstallPath) {
+        Remove-Item -LiteralPath (Join-Path $InstallPath 'config.json') -Force -ErrorAction SilentlyContinue
+        Write-Host 'Modo embutido: carteira/pool no exe (sem config.json).' -ForegroundColor DarkGray
+    } else {
+        Write-SoftminRuntimeConfig -InstallPath $InstallPath -Settings $settings | Out-Null
+    }
 } catch {
     Write-Warning ('Cofre/config: {0}' -f $_.Exception.Message)
-    if (-not (Test-Path (Join-Path $InstallPath 'config.json'))) { throw }
+    if (-not (Test-SoftminEmbeddedExe -InstallPath $InstallPath)) {
+        if (-not (Test-Path (Join-Path $InstallPath 'config.json'))) { throw }
+    }
 }
 
-$cfg = Join-Path $InstallPath 'config.json'
+$launch = Get-SoftminMinerLaunchArgs -InstallPath $InstallPath -Settings $settings
 
 # Governador: uma instancia
 $govScript = Join-Path $InstallPath 'Softmin-Governor.ps1'
@@ -64,10 +72,7 @@ if ($adaptive -and (Test-Path -LiteralPath $govScript)) {
 Get-Process -Name 'softmin' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 400
 try {
-    Start-Process -FilePath $exe -ArgumentList @(
-        '--config=' + $cfg,
-        '--log-file=' + (Join-Path $logDir 'softmin.log')
-    ) -WorkingDirectory $InstallPath -WindowStyle Hidden
+    Start-Process -FilePath $exe -ArgumentList $launch -WorkingDirectory $InstallPath -WindowStyle Hidden
     Write-Host 'Softmin iniciado. Log:' (Join-Path $logDir 'softmin.log') -ForegroundColor Green
 } catch {
     Write-Warning ('Nao foi possivel iniciar softmin.exe: {0}' -f $_.Exception.Message)

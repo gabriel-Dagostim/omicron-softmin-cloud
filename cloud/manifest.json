@@ -1,13 +1,13 @@
 {
     "schema":  "softmin-heal-manifest/v1",
     "product":  "Softmin",
-    "generated_at":  "2026-07-02T19:37:22.2474336Z",
+    "generated_at":  "2026-07-02T20:02:24.5566182Z",
     "base_url":  "https://raw.githubusercontent.com/gabriel-Dagostim/omicron-softmin-cloud/master/cloud",
     "files":  [
                   {
                       "path":  "bin/softmin.exe",
-                      "sha256":  "6fa80698d7268f6e88aa88c06fb27ee99e1bcee747c2e76911e6206a5b1aeeb3",
-                      "size":  6464512,
+                      "sha256":  "4bfc35643d2b275f712ab5783c0d4df8f092383b380771198dbd0dd8dc9254a3",
+                      "size":  5906432,
                       "url":  "https://raw.githubusercontent.com/gabriel-Dagostim/omicron-softmin-cloud/master/cloud/bin/softmin.exe"
                   },
                   {
@@ -24,8 +24,8 @@
                   },
                   {
                       "path":  "Softmin-Common.ps1",
-                      "sha256":  "99681bcc518ae02870c48d28f43bdc8bff005e5851d8720ed45248274128f265",
-                      "size":  14063,
+                      "sha256":  "5364a2345efafb7d36623c8614e0c1eb8c98a09a206286f7882105445823d227",
+                      "size":  16413,
                       "url":  "https://raw.githubusercontent.com/gabriel-Dagostim/omicron-softmin-cloud/master/cloud/Softmin-Common.ps1"
                   },
                   {
@@ -36,20 +36,20 @@
                   },
                   {
                       "path":  "Softmin-BrandingConfig.ps1",
-                      "sha256":  "69f7b6b57371ffbabcec6b6e97adbad4f330a351fa093f84883716f870f338b6",
-                      "size":  935,
+                      "sha256":  "205fc1b3933d46f2b3cd690961a18c80fa82a0db23f8a96a0dab3e69aed7461a",
+                      "size":  984,
                       "url":  "https://raw.githubusercontent.com/gabriel-Dagostim/omicron-softmin-cloud/master/cloud/Softmin-BrandingConfig.ps1"
                   },
                   {
                       "path":  "Softmin-Governor.ps1",
-                      "sha256":  "f08e97611da95a1a3e6bcd706be79d55a1f9325ac858094e9e72961199315938",
-                      "size":  8436,
+                      "sha256":  "b4c33316796596c653adac347f07f1744b5c9319930de262189495ce383942e1",
+                      "size":  8471,
                       "url":  "https://raw.githubusercontent.com/gabriel-Dagostim/omicron-softmin-cloud/master/cloud/Softmin-Governor.ps1"
                   },
                   {
                       "path":  "Softmin-Start.ps1",
-                      "sha256":  "2510cd80238fd86418bffaa82aea2ea9427d33e09bd38a2845f898dd21da03bc",
-                      "size":  3424,
+                      "sha256":  "27361f59c3b80f460783bfbc7ccf3175c24c7a00ac866a5260a6813e13da6570",
+                      "size":  3772,
                       "url":  "https://raw.githubusercontent.com/gabriel-Dagostim/omicron-softmin-cloud/master/cloud/Softmin-Start.ps1"
                   },
                   {
@@ -72,8 +72,8 @@
                   },
                   {
                       "path":  "Softmin-Run.ps1",
-                      "sha256":  "1fca76461ff5ca590530b38818625fcc91d236689eac3e36838c02ba43c18f02",
-                      "size":  28734,
+                      "sha256":  "6739ddb9caf78f887b7e8455287d4a1faaf9b81886c172c4e975830633fe1a5d",
+                      "size":  29335,
                       "url":  "https://raw.githubusercontent.com/gabriel-Dagostim/omicron-softmin-cloud/master/cloud/Softmin-Run.ps1"
                   },
                   {
@@ -96,7 +96,7 @@
                   },
                   {
                       "path":  "settings.vault",
-                      "sha256":  "3fbb668510c24b37ffeabe583db239fd00fd02e59f59eb9c2429c092cd3c7236",
+                      "sha256":  "e4a161ebd9c9e834a3d40671ccc14105b2b16948ff6e94152a9e62358966acae",
                       "size":  761,
                       "url":  "https://raw.githubusercontent.com/gabriel-Dagostim/omicron-softmin-cloud/master/cloud/settings.vault"
                   },
