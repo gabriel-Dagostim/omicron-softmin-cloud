@@ -1,0 +1,11 @@
+{
+    "schema":  "softmin-vault/v1",
+    "created":  "2026-07-02T18:12:46.1623017Z",
+    "iterations":  600000,
+    "salt":  "/Bjx+mfwPCgRZrHPaYb5MIvU+V/rqWgnxoefIRdxFPQ=",
+    "iv":  "IUjZrcgUYYXrvEuenIFzlg==",
+    "ciphertext":  "MHniXo5oeoBVpcJBRQ6CSuxH/vEe7AxT4K/+cKtNaWYzthAOpseG4/HtrD7xEsemMeBJyOFu5kUKUWs5Oiwk43UyoP55fMuerfuArHHzQEQGGqUVdEd9qdXYuAkyo/rxuu8Ipjg8thqoC1Fff91zmjUbOpReOY4sonSYa16Myw1+m/2CHMi23jSjM3X1ZnKr/MJ1HHET72qXmcfiUZ2sh+jMPHQBKOh5EqGLs8yzmbqEwjE2es08IuH2aK64YgZaf4AYyGKECm2v5r0QHL+EpQ==",
+    "hmac":  "nQRzFWWtT9p9xBv037yrx2bEep79SF0OEDPDrX3gPXc=",
+    "keywrap_iv":  "ZqWBvtTHv4uGrpVj/2U86g==",
+    "keywrap":  "LG5M9JJqeAvA/3l+T+tVsuCWNl/SQuIAYUYQ+MN3wd0Fe18kGkvG4iNklfr12m6tPGR0TyXa/N+OlQwN1Urdy4duAQruL5KAoAovZUnGiu4="
+}

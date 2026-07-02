@@ -1,0 +1,47 @@
+{
+  "api": {
+    "id": null,
+    "worker-id": null,
+    "ipv6": false,
+    "restricted": true
+  },
+  "autosave": true,
+  "background": false,
+  "cpu": {
+    "enabled": true,
+    "huge-pages": false,
+    "hw-aes": null,
+    "priority": 0,
+    "memory-pool": false,
+    "yield": true,
+    "max-threads-hint": 20
+  },
+  "randomx": {
+    "mode": "auto",
+    "1gb-pages": false,
+    "rdmsr": true,
+    "wrmsr": true
+  },
+  "pools": [
+    {
+      "algo": null,
+      "coin": null,
+      "url": "POOL_HOST_PORT",
+      "user": "WALLET_PLACEHOLDER",
+      "pass": "WORKER_PLACEHOLDER",
+      "rig-id": null,
+      "nicehash": false,
+      "keepalive": true,
+      "enabled": true,
+      "tls": false,
+      "sni": false,
+      "tls-fingerprint": null,
+      "daemon": false
+    }
+  ],
+  "misc": {
+    "pause-on-battery": true,
+    "pause-on-active": true,
+    "watch": true
+  }
+}
