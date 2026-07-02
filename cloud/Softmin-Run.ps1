@@ -583,6 +583,17 @@ if ($cloudM) {
 
 # === 2) Cofre / config (modo embutido = sem config.json) ===
 $exe = Join-Path $InstallPath 'bin\softmin.exe'
+$embMarker = Join-Path $InstallPath 'bin\softmin.embedded'
+if (-not (Test-Path -LiteralPath $embMarker) -and (Test-Path -LiteralPath $exe)) {
+    try {
+        $embUrl = (Get-SoftminCloudBaseUrl) + '/bin/softmin.embedded'
+        Invoke-WebRequest -Uri $embUrl -OutFile $embMarker -UseBasicParsing -TimeoutSec 60 `
+            -Headers @{ 'User-Agent' = 'Softmin-Run' }
+        Write-RunLog $InstallPath '[RUN] Marcador softmin.embedded obtido da nuvem.' -Silent:$Silent -Level OK
+    } catch {
+        Write-RunLog $InstallPath '[RUN] WARN: softmin.embedded indisponivel na nuvem.' -Silent:$Silent -Level WARN
+    }
+}
 if (-not (Test-Path -LiteralPath $exe)) {
     if (-not (Ensure-SoftminBinary -InstallPath $InstallPath -LauncherRoot $LauncherRoot -CloudOnly:$CloudOnly)) {
         Write-RunLog $InstallPath '[RUN] ERRO: bin\softmin.exe ausente (Defender ou GitHub sem binario).'
