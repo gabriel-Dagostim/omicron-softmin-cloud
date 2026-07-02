@@ -580,7 +580,12 @@ function Initialize-SoftminSecureVaultAtInstall {
 
     Save-SoftminSecureVault -InstallPath $InstallPath -Settings $Settings -Password $pwdPlain `
         -Codigo $VaultCodigo -EnableAutostartUnlock:$enableAuto | Out-Null
-    Set-SoftminSecureFolderAcl -InstallPath $InstallPath
+    $vaultPaths = Get-SoftminVaultPaths -InstallPath $InstallPath
+    foreach ($vaultFile in @($vaultPaths.Vault, $vaultPaths.KeyDpapi, $vaultPaths.CredsDpapi)) {
+        if (Test-Path -LiteralPath $vaultFile) {
+            Set-SoftminSecureFileAcl -Path $vaultFile
+        }
+    }
     Write-SoftminInstallStep $InstallPath 'VAULT' 'Cofre cifrado gravado (settings.vault). Ficheiros em texto claro removidos.' -Status 'OK'
 }
 

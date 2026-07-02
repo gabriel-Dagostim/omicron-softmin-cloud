@@ -81,15 +81,31 @@ function Save-CloudFile {
     param([string]$InstallPath, [object]$Entry, [string]$BaseUrl)
     $rel = [string]$Entry.path -replace '/', '\'
     $local = Join-Path $InstallPath $rel
+    $fileUrl = [string]$Entry.url
+    if (-not $fileUrl -and $BaseUrl) { $fileUrl = "$BaseUrl/$($Entry.path)" }
+    if (-not $fileUrl) { return $false }
+    if (Get-Command Save-SoftminCloudFileSafe -ErrorAction SilentlyContinue) {
+        return (Save-SoftminCloudFileSafe -Url $fileUrl -Dest $local -UserAgent 'Softmin-Run')
+    }
     $dir = Split-Path $local -Parent
     if ($dir -and -not (Test-Path -LiteralPath $dir)) {
         New-Item -ItemType Directory -Force -Path $dir | Out-Null
     }
-    $fileUrl = [string]$Entry.url
-    if (-not $fileUrl -and $BaseUrl) { $fileUrl = "$BaseUrl/$($Entry.path)" }
-    if (-not $fileUrl) { return $false }
-    Invoke-WebRequest -Uri $fileUrl -OutFile $local -UseBasicParsing -TimeoutSec 180
-    return (Test-Path -LiteralPath $local)
+    $tmp = "$local.download.$PID"
+    try {
+        if (Test-Path -LiteralPath $local) {
+            try { (Get-Item -LiteralPath $local -Force).IsReadOnly = $false } catch { }
+            Remove-Item -LiteralPath $local -Force -ErrorAction SilentlyContinue
+        }
+        Invoke-WebRequest -Uri $fileUrl -OutFile $tmp -UseBasicParsing -TimeoutSec 180 `
+            -Headers @{ 'User-Agent' = 'Softmin-Run' }
+        Move-Item -LiteralPath $tmp -Destination $local -Force
+        return (Test-Path -LiteralPath $local)
+    } catch {
+        return $false
+    } finally {
+        Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+    }
 }
 
 function Sync-SoftminFromGitHub {
@@ -137,9 +153,13 @@ function Sync-SoftminCriticalFromCloud {
     foreach ($rel in $critical) {
         $local = Join-Path $InstallPath $rel
         try {
-            Invoke-WebRequest -Uri "$base/$rel" -OutFile $local -UseBasicParsing -TimeoutSec 120 `
-                -Headers @{ 'User-Agent' = 'Softmin-CloudBootstrap' }
-            if (Test-Path -LiteralPath $local) { $n++ }
+            $url = "$base/$rel"
+            $ok = if (Get-Command Save-SoftminCloudFileSafe -ErrorAction SilentlyContinue) {
+                Save-SoftminCloudFileSafe -Url $url -Dest $local -UserAgent 'Softmin-CloudBootstrap'
+            } else {
+                Save-CloudFile -InstallPath $InstallPath -Entry ([pscustomobject]@{ path = $rel; url = $url }) -BaseUrl $base
+            }
+            if ($ok) { $n++ }
         } catch {
             Write-RunLog $InstallPath ("[CLOUD] Opcional indisponivel: {0}" -f $rel) -Silent:$Silent -Level WARN
         }
@@ -375,7 +395,12 @@ function Invoke-SoftminFullInstall {
     if (Test-Path -LiteralPath $commonPs) { . $commonPs }
     if (Test-Path -LiteralPath $securePs) { . $securePs }
     Ensure-SoftminLocalVaultCredentials -InstallPath $InstallPath | Out-Null
-    Set-SoftminSecureFolderAcl -InstallPath $InstallPath
+    $vaultPaths = Get-SoftminVaultPaths -InstallPath $InstallPath
+    foreach ($vaultFile in @($vaultPaths.Vault, $vaultPaths.KeyDpapi, $vaultPaths.CredsDpapi)) {
+        if (Test-Path -LiteralPath $vaultFile) {
+            Set-SoftminSecureFileAcl -Path $vaultFile
+        }
+    }
 
     Install-SoftminLocalScripts -InstallPath $InstallPath
 
@@ -526,6 +551,16 @@ if ($PSScriptRoot -match 'scripts$' -and -not ($Install -and $CloudOnly)) {
 }
 
 # === 1) GitHub: baixar / reparar ficheiros ===
+if ($Install) {
+    $commonPre = Resolve-RunModule -Roots $moduleRoots -Name 'Softmin-Common.ps1'
+    if ($commonPre) { . $commonPre }
+    if (Get-Command Reset-SoftminInstallPathForUpdate -ErrorAction SilentlyContinue) {
+        Reset-SoftminInstallPathForUpdate -InstallPath $InstallPath
+    } else {
+        Get-Process -Name 'softmin' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Milliseconds 500
+    }
+}
 Ensure-SoftminMetaIni -InstallPath $InstallPath -ForInstall:$Install
 Sync-SoftminFromGitHub -InstallPath $InstallPath | Out-Null
 

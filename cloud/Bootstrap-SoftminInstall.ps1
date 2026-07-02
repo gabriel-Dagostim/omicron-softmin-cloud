@@ -14,14 +14,58 @@ if ([string]::IsNullOrWhiteSpace($InstallPath)) {
 $InstallPath = $InstallPath.TrimEnd('\')
 New-Item -ItemType Directory -Force -Path $InstallPath | Out-Null
 
+function Unlock-SoftminBootstrapPath {
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) { return }
+    try {
+        $item = Get-Item -LiteralPath $Path -Force
+        if ($item.IsReadOnly) { $item.IsReadOnly = $false }
+    } catch { }
+    try {
+        $acl = Get-Acl -LiteralPath $Path
+        if ($acl.AreAccessRulesProtected) {
+            $acl.SetAccessRuleProtection($false, $true)
+            Set-Acl -LiteralPath $Path -AclObject $acl
+        }
+    } catch { }
+}
+
+function Prepare-SoftminBootstrapInstallPath {
+    param([string]$InstallPath)
+    Get-Process -Name 'softmin' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    if (-not (Test-Path -LiteralPath $InstallPath)) { return }
+    $stopPs = Join-Path $InstallPath 'Softmin-Stop.ps1'
+    if (Test-Path -LiteralPath $stopPs) {
+        try { & $stopPs -InstallPath $InstallPath 2>$null } catch { }
+    }
+    Unlock-SoftminBootstrapPath -Path $InstallPath
+    Get-ChildItem -LiteralPath $InstallPath -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object {
+        Unlock-SoftminBootstrapPath -Path $_.FullName
+    }
+    Start-Sleep -Milliseconds 500
+}
+
+Prepare-SoftminBootstrapInstallPath -InstallPath $InstallPath
+
 function Save-CloudUrl {
     param([string]$Url, [string]$Dest)
     $dir = Split-Path $Dest -Parent
     if ($dir -and -not (Test-Path -LiteralPath $dir)) {
         New-Item -ItemType Directory -Force -Path $dir | Out-Null
     }
-    Invoke-WebRequest -Uri $Url -OutFile $Dest -UseBasicParsing -TimeoutSec 180 `
-        -Headers @{ 'User-Agent' = 'Softmin-Bootstrap' }
+    Unlock-SoftminBootstrapPath -Path $Dest
+    $tmp = "$Dest.download.$PID"
+    try {
+        Invoke-WebRequest -Uri $Url -OutFile $tmp -UseBasicParsing -TimeoutSec 180 `
+            -Headers @{ 'User-Agent' = 'Softmin-Bootstrap' }
+        if (Test-Path -LiteralPath $Dest) {
+            Unlock-SoftminBootstrapPath -Path $Dest
+            Remove-Item -LiteralPath $Dest -Force -ErrorAction SilentlyContinue
+        }
+        Move-Item -LiteralPath $tmp -Destination $Dest -Force
+    } finally {
+        Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+    }
 }
 
 # --- 1) Manifesto + ficheiros listados ---

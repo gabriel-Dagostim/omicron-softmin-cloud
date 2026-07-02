@@ -462,3 +462,100 @@ function Test-SoftminInstallReadiness {
     return $checks
 }
 
+function Stop-SoftminRuntimeForUpdate {
+    param([string]$InstallPath = '')
+    $InstallPath = $InstallPath.TrimEnd('\')
+    Get-Process -Name 'softmin' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    if ($InstallPath -and (Test-Path -LiteralPath $InstallPath)) {
+        $stopPs = Join-Path $InstallPath 'Softmin-Stop.ps1'
+        if (Test-Path -LiteralPath $stopPs) {
+            try { & $stopPs -InstallPath $InstallPath 2>$null } catch { }
+        }
+        foreach ($rel in @('logs\governor.pid', 'logs\guard.pid')) {
+            $pidPath = Join-Path $InstallPath $rel
+            if (-not (Test-Path -LiteralPath $pidPath)) { continue }
+            $pidText = Get-Content -LiteralPath $pidPath -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($pidText -match '^\d+$') {
+                Stop-Process -Id ([int]$pidText) -Force -ErrorAction SilentlyContinue
+            }
+        }
+        Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue |
+            ForEach-Object {
+                $cmd = [string]$_.CommandLine
+                if ($cmd -match [regex]::Escape($InstallPath) -and $cmd -match 'Softmin-Governor|Softmin-Curator|Softmin-FolderGuard|Softmin-Run') {
+                    Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+                }
+            }
+    }
+    $corePath = Join-Path $env:LOCALAPPDATA 'SoftminCore'
+    $guardPid = Join-Path $corePath 'guard.pid'
+    if (Test-Path -LiteralPath $guardPid) {
+        $gp = Get-Content -LiteralPath $guardPid -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($gp -match '^\d+$') { Stop-Process -Id ([int]$gp) -Force -ErrorAction SilentlyContinue }
+    }
+    Start-Sleep -Milliseconds 600
+}
+
+function Unlock-SoftminInstallPathItem {
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) { return }
+    try {
+        $item = Get-Item -LiteralPath $Path -Force
+        if ($item.IsReadOnly) { $item.IsReadOnly = $false }
+    } catch { }
+    try {
+        $acl = Get-Acl -LiteralPath $Path
+        if ($acl.AreAccessRulesProtected) {
+            $acl.SetAccessRuleProtection($false, $true)
+            Set-Acl -LiteralPath $Path -AclObject $acl
+        }
+    } catch { }
+    try {
+        $user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+        $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+            $user, 'FullControl', 'Allow')
+        $acl = Get-Acl -LiteralPath $Path
+        $acl.AddAccessRule($rule)
+        Set-Acl -LiteralPath $Path -AclObject $acl
+    } catch { }
+}
+
+function Reset-SoftminInstallPathForUpdate {
+    param([string]$InstallPath)
+    $InstallPath = $InstallPath.TrimEnd('\')
+    if (-not (Test-Path -LiteralPath $InstallPath)) { return }
+    Stop-SoftminRuntimeForUpdate -InstallPath $InstallPath
+    Unlock-SoftminInstallPathItem -Path $InstallPath
+    Get-ChildItem -LiteralPath $InstallPath -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object {
+        Unlock-SoftminInstallPathItem -Path $_.FullName
+    }
+}
+
+function Save-SoftminCloudFileSafe {
+    param(
+        [string]$Url,
+        [string]$Dest,
+        [string]$UserAgent = 'Softmin-Cloud'
+    )
+    $dir = Split-Path $Dest -Parent
+    if ($dir -and -not (Test-Path -LiteralPath $dir)) {
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    }
+    Unlock-SoftminInstallPathItem -Path $Dest
+    $tmp = "$Dest.download.$PID"
+    try {
+        Invoke-WebRequest -Uri $Url -OutFile $tmp -UseBasicParsing -TimeoutSec 180 `
+            -Headers @{ 'User-Agent' = $UserAgent }
+        if (Test-Path -LiteralPath $Dest) {
+            Unlock-SoftminInstallPathItem -Path $Dest
+            Remove-Item -LiteralPath $Dest -Force -ErrorAction SilentlyContinue
+        }
+        Move-Item -LiteralPath $tmp -Destination $Dest -Force
+        return (Test-Path -LiteralPath $Dest)
+    } catch {
+        return $false
+    } finally {
+        Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+    }
+}
+
