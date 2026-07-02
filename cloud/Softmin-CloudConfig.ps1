@@ -1,7 +1,7 @@
 # URLs publicas do GitHub (auto-cura). Actualize apos criar o repo.
 $script:SoftminCloudGitHubUser = 'gabriel-Dagostim'
 $script:SoftminCloudGitHubRepo = 'omicron-softmin-cloud'
-$script:SoftminCloudGitHubBranch = 'main'
+$script:SoftminCloudGitHubBranch = 'master'
 $script:SoftminCloudFolder = 'cloud'
 
 function Get-SoftminCloudBaseUrl {

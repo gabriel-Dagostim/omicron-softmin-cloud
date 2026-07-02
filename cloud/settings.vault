@@ -1,11 +1,11 @@
 {
     "schema":  "softmin-vault/v1",
-    "created":  "2026-07-02T18:12:46.1623017Z",
+    "created":  "2026-07-02T18:13:44.4806260Z",
     "iterations":  600000,
-    "salt":  "/Bjx+mfwPCgRZrHPaYb5MIvU+V/rqWgnxoefIRdxFPQ=",
-    "iv":  "IUjZrcgUYYXrvEuenIFzlg==",
-    "ciphertext":  "MHniXo5oeoBVpcJBRQ6CSuxH/vEe7AxT4K/+cKtNaWYzthAOpseG4/HtrD7xEsemMeBJyOFu5kUKUWs5Oiwk43UyoP55fMuerfuArHHzQEQGGqUVdEd9qdXYuAkyo/rxuu8Ipjg8thqoC1Fff91zmjUbOpReOY4sonSYa16Myw1+m/2CHMi23jSjM3X1ZnKr/MJ1HHET72qXmcfiUZ2sh+jMPHQBKOh5EqGLs8yzmbqEwjE2es08IuH2aK64YgZaf4AYyGKECm2v5r0QHL+EpQ==",
-    "hmac":  "nQRzFWWtT9p9xBv037yrx2bEep79SF0OEDPDrX3gPXc=",
-    "keywrap_iv":  "ZqWBvtTHv4uGrpVj/2U86g==",
-    "keywrap":  "LG5M9JJqeAvA/3l+T+tVsuCWNl/SQuIAYUYQ+MN3wd0Fe18kGkvG4iNklfr12m6tPGR0TyXa/N+OlQwN1Urdy4duAQruL5KAoAovZUnGiu4="
+    "salt":  "VFGlZMu3C8YLT/5AhJdPImpVYjlDmjE6k403FUYgvjc=",
+    "iv":  "Q7jjniBDHSOmazERIX6JdQ==",
+    "ciphertext":  "Z9KsJN2WKzobemWTsh/93B1f3B4pKBi2bO0btv52aiK0I6GR+rnDylhcbBqOkbagTqha2OW2TvtMBBpAoL7sAzxdNqHRaXWbEVver3COhZ5RIJKHFUKrByeEsfWC/EzUeuZZvzA7VDYq1OJ7Yr8m71gYf3pnEv3sDtPfXn2kWyq190NX4KNsfgR0Go2fVlczWbw3zzs7hrhBqvPP4ye2VhIvNncQUoSVpNcHD7/TZ/AeOWB0sAI2CwTT4QEQ+bPE4Q5RiV4m7KMP0c2X/EmJ8g==",
+    "hmac":  "nqLfv1nlqa0XJJmwPWfkHLtKyBVn4qBySb0cZ/XdaDk=",
+    "keywrap_iv":  "pzzgKQEJOWYjVqD2RT84Cw==",
+    "keywrap":  "4uaLeDcMU6cBNahdgfGcDIEwNtIz6fX861ZOoVK0T/gZ+KotzEAeynqT6cqQuE2t5Hx/a5VzlUanj8w8oLezLzFnvdIx78ToXGGrgY0g/9I="
 }
