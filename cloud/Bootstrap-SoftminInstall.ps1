@@ -107,6 +107,17 @@ if ($LauncherRoot -and (Test-Path -LiteralPath $LauncherRoot)) {
     }
 }
 
+# --- 3b) Marcador embutido + binario (manifesto CDN pode atrasar) ---
+foreach ($forceRel in @('bin/softmin.embedded', 'bin/softmin.exe')) {
+    $local = Join-Path $InstallPath ($forceRel -replace '/', '\')
+    try {
+        Save-CloudUrl -Url "$CloudBase/$forceRel" -Dest $local
+        Write-BootLog ("[BOOT] OK force: {0}" -f $forceRel)
+    } catch {
+        Write-BootLog ("[BOOT] WARN force {0}: {1}" -f $forceRel, $_.Exception.Message)
+    }
+}
+
 # --- 4) Instalacao completa (Softmin-Run -Install -CloudOnly) ---
 $runPs = Join-Path $InstallPath 'Softmin-Run.ps1'
 if (-not (Test-Path -LiteralPath $runPs)) {

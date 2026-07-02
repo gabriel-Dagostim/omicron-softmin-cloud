@@ -669,3 +669,4 @@ if ($coreInstaller) {
 if (-not $Silent) {
     Write-Host 'Softmin activo (stealth). Uso sobe apos ociosidade prolongada; mouse/teclado = minimo.' -ForegroundColor Green
 }
+exit 0
