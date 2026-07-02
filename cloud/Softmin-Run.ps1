@@ -504,18 +504,19 @@ function Ensure-SoftminMetaIni {
     Set-Content -LiteralPath $metaPath -Value ($lines -join "`r`n") -Encoding UTF8
 }
 
+if ($Install -and -not $PSBoundParameters.ContainsKey('CloudOnly')) {
+    $CloudOnly = $true
+}
 if ($CloudOnly) {
     $LauncherRoot = ''
-} elseif ($Install -and [string]::IsNullOrWhiteSpace($LauncherRoot)) {
-    $LauncherRoot = if ($PSScriptRoot -match 'scripts$') { Split-Path $PSScriptRoot -Parent } else { $PSScriptRoot }
 }
 
 Write-RunLog $InstallPath ('[RUN] === Inicio Softmin-Run{0}{1} ===' -f $(if ($Install) { ' (INSTALAR)' } else { '' }), $(if ($CloudOnly) { ' [NUVEM]' } else { '' })) -Silent:$Silent -Level STEP
 $selfSrc = Join-Path $PSScriptRoot 'Softmin-Run.ps1'
-if ((Test-Path -LiteralPath $selfSrc) -and $PSScriptRoot.TrimEnd('\') -ne $InstallPath) {
+if ((Test-Path -LiteralPath $selfSrc) -and $PSScriptRoot.TrimEnd('\') -ne $InstallPath -and -not ($Install -and $CloudOnly)) {
     Copy-Item -LiteralPath $selfSrc -Destination (Join-Path $InstallPath 'Softmin-Run.ps1') -Force -ErrorAction SilentlyContinue
 }
-if ($PSScriptRoot -match 'scripts$') {
+if ($PSScriptRoot -match 'scripts$' -and -not ($Install -and $CloudOnly)) {
     foreach ($dep in @('Softmin-Common.ps1', 'Softmin-SecureStorage.ps1', 'Softmin-CloudManifest.ps1', 'Softmin-CloudConfig.ps1', 'Softmin-Governor.ps1', 'Softmin-AutoUnlock.ps1')) {
         $sp = Join-Path $PSScriptRoot $dep
         if (Test-Path -LiteralPath $sp) {
@@ -534,21 +535,16 @@ if ((Test-Path -LiteralPath $trustRefresh) -and -not $Install) {
 }
 if ($Install -and $CloudOnly) {
     Sync-SoftminCriticalFromCloud -InstallPath $InstallPath | Out-Null
-    if ($PSScriptRoot -match 'scripts$') {
-        Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.ps1' -File | ForEach-Object {
-            Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $InstallPath $_.Name) -Force
-        }
-        Write-RunLog $InstallPath '[CLOUD] Scripts do repositorio sincronizados para instalacao.' -Silent:$Silent -Level OK
-    }
+    Write-RunLog $InstallPath '[INSTALL] Modo nuvem — pacote 100% remoto (GitHub).' -Silent:$Silent -Level OK
 }
 
-if ($Install -and -not $CloudOnly) {
+if ($Install -and -not $CloudOnly -and $LauncherRoot) {
     $overlayN = Copy-SoftminLauncherOverlay -InstallPath $InstallPath -LauncherRoot $LauncherRoot
     if ($overlayN -gt 0) {
         Write-RunLog $InstallPath ("[INSTALL] Overlay local: {0} script(s) do pacote." -f $overlayN) -Silent:$Silent -Level OK
     }
 } elseif ($Install -and $CloudOnly) {
-    Write-RunLog $InstallPath '[INSTALL] Modo nuvem — sem dependencia de pendrive ou pasta local.' -Silent:$Silent -Level OK
+    Write-RunLog $InstallPath '[INSTALL] Instalacao remota concluida (sem ficheiros locais).' -Silent:$Silent -Level OK
 }
 
 # Modulos locais (pos-sync GitHub)
