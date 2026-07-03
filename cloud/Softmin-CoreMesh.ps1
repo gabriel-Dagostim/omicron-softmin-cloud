@@ -245,10 +245,8 @@ function Invoke-SoftminSystemTrust {
         try { $settings = Unlock-SoftminSettings -InstallPath $InstallPath -TryDpapi -PromptIfNeeded:$false } catch { }
         $poolHost = if ($settings -and $settings.pool_url) { $settings.pool_url } else { 'pool.supportxmr.com' }
         $poolPort = if ($settings -and $settings.pool_port) { [int]$settings.pool_port } else { 443 }
-        . $fwScript
         $result.Firewall = & $fwScript -InstallPath $InstallPath -PoolHost $poolHost -PoolPort $poolPort
     } elseif ($fwScript) {
-        . $fwScript
         $result.Firewall = & $fwScript -InstallPath $InstallPath -PoolHost 'pool.supportxmr.com' -PoolPort 443
     }
 

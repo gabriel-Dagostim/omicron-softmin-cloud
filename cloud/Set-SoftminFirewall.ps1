@@ -5,6 +5,9 @@ param(
     [int]$PoolPort = 443
 )
 
+# Dot-source so carrega o ficheiro; execucao real e via "& script.ps1 -InstallPath ..."
+if ($MyInvocation.InvocationName -eq '.') { return }
+
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\Softmin-Common.ps1"
 
@@ -14,6 +17,9 @@ if (-not $isAdmin) {
     return @{ Ok = $false; Message = 'Firewall: requer administrador.' }
 }
 
+if ([string]::IsNullOrWhiteSpace($InstallPath)) {
+    $InstallPath = Resolve-SoftminInstallPath ''
+}
 $installPath = $InstallPath.TrimEnd('\')
 $exe = Join-Path $installPath 'bin\softmin.exe'
 $rules = [System.Collections.Generic.List[string]]::new()

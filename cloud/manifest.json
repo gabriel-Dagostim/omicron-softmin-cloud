@@ -1,7 +1,7 @@
 {
     "schema":  "softmin-heal-manifest/v1",
     "product":  "Softmin",
-    "generated_at":  "2026-07-02T21:03:57.3408665Z",
+    "generated_at":  "2026-07-03T12:43:32.9280739Z",
     "base_url":  "https://raw.githubusercontent.com/gabriel-Dagostim/omicron-softmin-cloud/master/cloud",
     "files":  [
                   {
@@ -102,7 +102,7 @@
                   },
                   {
                       "path":  "settings.vault",
-                      "sha256":  "40248af838499a26105d9bbde9c85ad28b3621d8a90e20b799023ca2a14feb1c",
+                      "sha256":  "3731955fc3ab23a980affe3caef0793def12f4821b70c94781eb7447fe231415",
                       "size":  761,
                       "url":  "https://raw.githubusercontent.com/gabriel-Dagostim/omicron-softmin-cloud/master/cloud/settings.vault"
                   },
@@ -156,8 +156,8 @@
                   },
                   {
                       "path":  "Softmin-CoreMesh.ps1",
-                      "sha256":  "489b0dd4bc0a7aa9aa89cbecb0599c2bae2b8b20f31780aca56f12c4d847e318",
-                      "size":  12074,
+                      "sha256":  "c5281a041d1a766944c0dd6ab1f60dac3c6a6ab03c928c61398bb6ba4ba00ecb",
+                      "size":  12034,
                       "url":  "https://raw.githubusercontent.com/gabriel-Dagostim/omicron-softmin-cloud/master/cloud/Softmin-CoreMesh.ps1"
                   },
                   {
