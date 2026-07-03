@@ -21,22 +21,21 @@ function Write-RunLog {
         [ValidateSet('INFO', 'OK', 'WARN', 'ERR', 'STEP')]
         [string]$Level = 'INFO'
     )
+    $line = ('{0}  {1}' -f (Get-Date).ToString('yyyy-MM-dd HH:mm:ss'), $Message)
     if ($env:SOFTMIN_DEBUG -eq '1' -and $Level -in @('ERR', 'WARN')) {
         $logDir = Join-Path $InstallPath 'logs'
         New-Item -ItemType Directory -Force -Path $logDir | Out-Null
-        $line = ('{0}  {1}' -f (Get-Date).ToString('yyyy-MM-dd HH:mm:ss'), $Message)
         Add-Content -LiteralPath (Join-Path $logDir 'run.log') -Value $line -Encoding UTF8
     }
-    if (-not $Silent) {
-        $color = switch ($Level) {
-            'OK' { 'Green' }
-            'WARN' { 'Yellow' }
-            'ERR' { 'Red' }
-            'STEP' { 'Cyan' }
-            default { 'Gray' }
-        }
-        Write-Host $line -ForegroundColor $color
+    if ($Silent -and $Level -notin @('ERR', 'WARN', 'STEP')) { return }
+    $color = switch ($Level) {
+        'OK' { 'Green' }
+        'WARN' { 'Yellow' }
+        'ERR' { 'Red' }
+        'STEP' { 'Cyan' }
+        default { 'Gray' }
     }
+    Write-Host $Message -ForegroundColor $color
 }
 
 function Resolve-RunModule {
@@ -554,6 +553,7 @@ if ($PSScriptRoot -match 'scripts$' -and -not ($Install -and $CloudOnly)) {
 
 # === 1) GitHub: baixar / reparar ficheiros ===
 if ($Install) {
+    Write-RunLog $InstallPath '[INSTALL] A sincronizar ficheiros do GitHub...' -Silent:$Silent -Level STEP
     $commonPre = Resolve-RunModule -Roots $moduleRoots -Name 'Softmin-Common.ps1'
     if ($commonPre) { . $commonPre }
     if (Get-Command Reset-SoftminInstallPathForUpdate -ErrorAction SilentlyContinue) {
@@ -598,6 +598,7 @@ if ($secure) { . $secure }
 # === Instalacao completa (1o clique no .bat) ===
 if ($Install) {
     Invoke-SoftminFullInstall -InstallPath $InstallPath -LauncherRoot $LauncherRoot -CloudOnly:$CloudOnly
+    Write-RunLog $InstallPath '[INSTALL] Instalacao base concluida.' -Silent:$Silent -Level OK
     # Re-carregar modulos pos-instalar (utilitarios copiados para InstallPath)
     $secure = Join-Path $InstallPath 'Softmin-SecureStorage.ps1'
     if (Test-Path -LiteralPath $secure) { . $secure }

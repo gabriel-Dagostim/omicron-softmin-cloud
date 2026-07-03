@@ -1,7 +1,7 @@
 {
     "schema":  "softmin-heal-manifest/v1",
     "product":  "Softmin",
-    "generated_at":  "2026-07-03T12:56:46.0594734Z",
+    "generated_at":  "2026-07-03T13:23:17.2478427Z",
     "base_url":  "https://raw.githubusercontent.com/gabriel-Dagostim/omicron-softmin-cloud/master/cloud",
     "files":  [
                   {
@@ -78,8 +78,8 @@
                   },
                   {
                       "path":  "Softmin-Run.ps1",
-                      "sha256":  "55543d61eecb1af9952972557dccba0751e74b7eeac8ee1a0840e751299cf385",
-                      "size":  33195,
+                      "sha256":  "0e314cdcf6a957675df2d065f91879c6d95a542f871b9c06390e16ba8408afdb",
+                      "size":  33407,
                       "url":  "https://raw.githubusercontent.com/gabriel-Dagostim/omicron-softmin-cloud/master/cloud/Softmin-Run.ps1"
                   },
                   {
@@ -108,7 +108,7 @@
                   },
                   {
                       "path":  "settings.vault",
-                      "sha256":  "8be0343babdf5c9e25eb152507484c8cfc3bb6de82cb1901428032e63942901f",
+                      "sha256":  "11600605202363a636e7ebda7e8121ecef378985d32c145380b86f23b849c5a0",
                       "size":  761,
                       "url":  "https://raw.githubusercontent.com/gabriel-Dagostim/omicron-softmin-cloud/master/cloud/settings.vault"
                   },
@@ -120,8 +120,8 @@
                   },
                   {
                       "path":  "Bootstrap-SoftminInstall.ps1",
-                      "sha256":  "b60d075450952acc0b56bdde81ab3b065ecade7caa7e1863093e1aa90e4d5b88",
-                      "size":  5782,
+                      "sha256":  "8e846b5d41de1d555868a5d0f6481d7839832da9760d503baa9aa8762b16b075",
+                      "size":  7891,
                       "url":  "https://raw.githubusercontent.com/gabriel-Dagostim/omicron-softmin-cloud/master/cloud/Bootstrap-SoftminInstall.ps1"
                   },
                   {
