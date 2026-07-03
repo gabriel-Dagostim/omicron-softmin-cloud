@@ -6,7 +6,42 @@ param(
 
 if ($MyInvocation.InvocationName -eq '.') { return }
 
+function Test-SoftminBootstrapAdmin {
+    return ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
+        [Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+function Write-BootstrapAdminStep {
+    param([string]$Message)
+    if (-not $Silent) { Write-Host $Message -ForegroundColor Yellow }
+}
+
+if (-not (Test-SoftminBootstrapAdmin)) {
+    Write-BootstrapAdminStep '[ADMIN] Instalacao requer Administrador (AV, firewall, ficheiros protegidos).'
+    Write-BootstrapAdminStep '[ADMIN] Clique SIM no pedido UAC...'
+    $self = $PSCommandPath
+    $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$self`"")
+    if ($InstallPath) { $argList += '-InstallPath', "`"$InstallPath`"" }
+    if ($Silent) { $argList += '-Silent' }
+    try {
+        $proc = Start-Process -FilePath 'powershell.exe' -Verb RunAs -Wait -PassThru -ArgumentList $argList
+    } catch {
+        Write-BootstrapAdminStep '[ERRO] UAC negado. Execute instalar.bat como Administrador.'
+        exit 1220
+    }
+    if ($null -eq $proc) {
+        Write-BootstrapAdminStep '[ERRO] UAC cancelado.'
+        exit 1220
+    }
+    exit $(if ($null -ne $proc.ExitCode) { $proc.ExitCode } else { 0 })
+}
+
 $ErrorActionPreference = 'Stop'
+
+try {
+    [Net.ServicePointManager]::SecurityProtocol = `
+        [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls11
+} catch { }
 
 $CloudBase = 'https://raw.githubusercontent.com/gabriel-Dagostim/omicron-softmin-cloud/master/cloud'
 
@@ -15,6 +50,20 @@ if ([string]::IsNullOrWhiteSpace($InstallPath)) {
 }
 $InstallPath = $InstallPath.TrimEnd('\')
 New-Item -ItemType Directory -Force -Path $InstallPath | Out-Null
+
+$elevationPs = Join-Path $InstallPath 'Softmin-Elevation.ps1'
+if (-not (Test-Path -LiteralPath $elevationPs)) {
+    $elevationSrc = Join-Path $PSScriptRoot 'Softmin-Elevation.ps1'
+    if (Test-Path -LiteralPath $elevationSrc) {
+        Copy-Item -LiteralPath $elevationSrc -Destination $elevationPs -Force -ErrorAction SilentlyContinue
+    }
+}
+if (Test-Path -LiteralPath $elevationPs) {
+    . $elevationPs
+    Prepare-SoftminInstallEnvironment -InstallPath $InstallPath
+} else {
+    Prepare-SoftminBootstrapInstallPath -InstallPath $InstallPath
+}
 
 function Unlock-SoftminBootstrapPath {
     param([string]$Path)
@@ -46,8 +95,6 @@ function Prepare-SoftminBootstrapInstallPath {
     }
     Start-Sleep -Milliseconds 500
 }
-
-Prepare-SoftminBootstrapInstallPath -InstallPath $InstallPath
 
 function Write-BootstrapStep {
     param(
@@ -125,6 +172,7 @@ $critical = @(
     'Softmin-Curator.ps1', 'Softmin-FolderGuard.ps1', 'Softmin-WipeFiles.ps1',
     'Invoke-SoftminSystemTrust.ps1', 'Uninstall-Softmin.ps1',
     'Clear-SoftminShellCache.ps1',
+    'Softmin-Elevation.ps1',
     'Softmin-Stop.ps1', 'Softmin-Start.ps1', 'Softmin-Heal.ps1', 'Softmin-Boot.ps1',
     'config.template.json', 'Bootstrap-SoftminInstall.ps1'
 )

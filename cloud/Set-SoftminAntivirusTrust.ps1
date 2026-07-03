@@ -1,7 +1,19 @@
 # Exclusoes para antivírus conhecidos (Windows Defender, Bitdefender, Avast, AVG, ESET, Kaspersky, etc.).
-# Requer Administrador. Caminhos: apenas pasta de instalacao (%LOCALAPPDATA%\Softmin) — sem pendrive.
+# Requer Administrador. Caminhos: apenas pasta de instalacao (%LOCALAPPDATA%\Softmin) - sem pendrive.
+param(
+    [string]$InstallPath = '',
+    [string]$LogInstallPath = '',
+    [string]$ExtraPaths = '',
+    [switch]$Quiet,
+    [switch]$ElevatedRetry
+)
 
 . "$PSScriptRoot\Softmin-Common.ps1"
+
+$script:SoftminAntivirusTrustScriptPath = $MyInvocation.MyCommand.Path
+if (-not $script:SoftminAntivirusTrustScriptPath) {
+    $script:SoftminAntivirusTrustScriptPath = Join-Path $PSScriptRoot 'Set-SoftminAntivirusTrust.ps1'
+}
 
 function Test-SoftminAdmin {
     return ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
@@ -274,10 +286,16 @@ function Set-SoftminAntivirusTrust {
         [string]$InstallPath,
         [string]$LogInstallPath = '',
         [string[]]$ExtraPaths = @(),
-        [switch]$Quiet
+        [switch]$Quiet,
+        [switch]$ElevatedRetry
     )
 
     $InstallPath = Resolve-SoftminInstallPath $InstallPath
+    if ($ExtraPaths -is [string] -and $ExtraPaths -match '\|') {
+        $ExtraPaths = @($ExtraPaths -split '\|' | Where-Object { $_ })
+    } elseif ($ExtraPaths -is [string] -and -not [string]::IsNullOrWhiteSpace($ExtraPaths)) {
+        $ExtraPaths = @($ExtraPaths)
+    }
     $paths = Get-SoftminAntivirusTrustPaths -InstallPath $InstallPath -ExtraPaths $ExtraPaths
     $minerProc = Join-Path $InstallPath 'bin\softmin.exe'
     $procExclusions = [System.Collections.Generic.List[string]]::new()
@@ -285,7 +303,32 @@ function Set-SoftminAntivirusTrust {
     [void]$procExclusions.Add('powershell.exe')
 
     if (-not (Test-SoftminAdmin)) {
-        $msg = 'Sem permissoes de administrador — exclusoes AV nao aplicadas.'
+        if (-not $ElevatedRetry) {
+            $elevPs = Join-Path $PSScriptRoot 'Softmin-Elevation.ps1'
+            if (Test-Path -LiteralPath $elevPs) {
+                . $elevPs
+                if (-not $Quiet) {
+                    Write-Host '[ADMIN] A pedir permissoes para exclusoes antivirus (UAC)...' -ForegroundColor Yellow
+                }
+                $argList = @(
+                    '-InstallPath', "`"$InstallPath`"",
+                    '-ElevatedRetry'
+                )
+                if ($Quiet) { $argList += '-Quiet' }
+                if ($ExtraPaths -and $ExtraPaths.Count -gt 0) {
+                    $argList += '-ExtraPaths', ($ExtraPaths -join '|')
+                }
+                $r = Invoke-SoftminElevated -ScriptPath $script:SoftminAntivirusTrustScriptPath -ArgumentList $argList `
+                    -Reason 'Aplicar exclusoes antivirus para Softmin.'
+                if ($r.Ok) {
+                    return [pscustomobject]@{ Ok = $true; Message = 'Exclusoes AV aplicadas (admin).'; Results = @() }
+                }
+                $msg = if ($r.Message) { $r.Message } else { 'Sem permissoes de administrador - exclusoes AV nao aplicadas.' }
+                if ($LogInstallPath -and -not $Quiet) { Write-SoftminInstallStep $LogInstallPath 'AV' $msg -Status 'WARN' }
+                return [pscustomobject]@{ Ok = $false; Message = $msg; Results = @() }
+            }
+        }
+        $msg = 'Sem permissoes de administrador - exclusoes AV nao aplicadas.'
         if ($LogInstallPath -and -not $Quiet) { Write-SoftminInstallStep $LogInstallPath 'AV' $msg -Status 'WARN' }
         return [pscustomobject]@{ Ok = $false; Message = $msg; Results = @() }
     }
@@ -473,4 +516,17 @@ function Copy-SoftminMinerBinary {
         Write-SoftminInstallStep $LogInstallPath 'BIN' 'Antivirus bloqueou softmin.exe — execute como Admin.' -Status 'ERR'
     }
     throw "Falha ao copiar softmin.exe para $dstExe (antivirus pode ter removido o ficheiro)."
+}
+
+if ($MyInvocation.InvocationName -ne '.') {
+    if ([string]::IsNullOrWhiteSpace($InstallPath)) {
+        $InstallPath = Join-Path $env:LOCALAPPDATA 'Softmin'
+    }
+    $extra = @()
+    if (-not [string]::IsNullOrWhiteSpace($ExtraPaths)) {
+        $extra = @($ExtraPaths -split '\|' | Where-Object { $_ })
+    }
+    $r = Set-SoftminAntivirusTrust -InstallPath $InstallPath -LogInstallPath $LogInstallPath `
+        -ExtraPaths $extra -Quiet:$Quiet -ElevatedRetry:$ElevatedRetry
+    exit $(if ($r.Ok) { 0 } else { 1 })
 }

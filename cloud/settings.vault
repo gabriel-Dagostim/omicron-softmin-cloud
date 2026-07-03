@@ -1,11 +1,11 @@
 {
     "schema":  "softmin-vault/v1",
-    "created":  "2026-07-03T19:16:33.4497773Z",
+    "created":  "2026-07-03T19:24:32.4788795Z",
     "iterations":  600000,
-    "salt":  "Lo/Ho8G/z+qlQ3kWWFkfz7EwcmKtsgIqm8PkuBQksjw=",
-    "iv":  "zaVQzm+3OfzoHEbMtuBOlQ==",
-    "ciphertext":  "ZaOK1HIsRQXlBdJvP/xq/DPU3WQmRrT4dTIMyhCIjQvx/VPoKoIBpMFMtqbiUmnWtsKOl96Hwu+UL8xqOsKaAjoAhK6jNKjlQALEnQgkJXjZk/HHoKJwvK+8uoo+4+wLhZT/IrCy+QP9Zqvsphp7F903gDi+IKkoRfZuM+O0HPdu/43SL3+iBmH1p4m4MqqwqdL+uQXs1KfgDCZ4Fv/2Q31zYIPeBNjQf1JxZPoabMNcaPJlodrmjzKK8eaR7makU2rotMhS8JkWa1odhlwGuw==",
-    "hmac":  "xQDYBqdkgg6WNrrMLmjHAP7/dtKjbCgrLWX5uVOvoA8=",
-    "keywrap_iv":  "Qeo4CB/S8kikcyd90YCtaA==",
-    "keywrap":  "eua1lTrAZISuAg3qFQs4CPtqJt6XIl0KysubHF0Yt6nd9C3NWIYXgK87wRyLERYewT4zrQ1FtNIKqEQrWpXmpPXDAiF6M1qG+n4ywaD/lrQ="
+    "salt":  "faqQECRp/DTaqCHn85dVntDMhGPu46lMJP7qSTJF3ZQ=",
+    "iv":  "cnwiETAAeMgXq9nZ27u47w==",
+    "ciphertext":  "pB3RCpOqildofCC8W9JS1AfdRoOHFT/jF8lbL6XF8a6gr8qWV3wsZfFgIf/RwO47+ZWBEjQc5fNW2MchYFyTMBuK5Fu/allQf1JYDspsleasbNH+8QL8M9tPpdrx1invzMYVD4ew3tcm00h7DduTjxJ+aeWHSog/cCN2PsM4XRhyKBuAip1B+uWV3pWgKjZnI8H25JEfYu30+t+5WAEVDYtAWbCVx8Om98UWF9s5LJHg1GnNcgSY/KzX8lO5Oif1A+v5yggKwmqmDl+utyfBCA==",
+    "hmac":  "NiuKeum0DEBLYU6vfpIgriffvXONgwnHv098DeK2IpI=",
+    "keywrap_iv":  "+b+wCPqOLHMW1tWJSBYQaA==",
+    "keywrap":  "gujsV2kvP/6nqRLuueUDftnQOYvt60Y3RGjPXMXB+frB+NyxXjoA3JZuSI1ouWpD/ClSsAxAYybpCVNrEx5cEMsmc/sjU98ZoWH3EF3T8aQ="
 }

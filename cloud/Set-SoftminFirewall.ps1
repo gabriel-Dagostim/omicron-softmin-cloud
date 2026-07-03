@@ -2,7 +2,8 @@
 param(
     [string]$InstallPath = '',
     [string]$PoolHost = '',
-    [int]$PoolPort = 443
+    [int]$PoolPort = 443,
+    [switch]$ElevatedRetry
 )
 
 if ($MyInvocation.InvocationName -eq '.') { return }
@@ -14,6 +15,22 @@ $InstallPath = Resolve-SoftminInstallPathParam -InstallPath $InstallPath -Script
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
     [Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
+    if (-not $ElevatedRetry) {
+        $elevPs = Join-Path $PSScriptRoot 'Softmin-Elevation.ps1'
+        if (Test-Path -LiteralPath $elevPs) {
+            . $elevPs
+            Write-Host '[ADMIN] A pedir permissoes para firewall (UAC)...' -ForegroundColor Yellow
+            $argList = @('-InstallPath', "`"$InstallPath`"", '-ElevatedRetry')
+            if ($PoolHost) { $argList += '-PoolHost', "`"$PoolHost`"" }
+            if ($PoolPort -gt 0) { $argList += '-PoolPort', $PoolPort }
+            $r = Invoke-SoftminElevated -ScriptPath $PSCommandPath -ArgumentList $argList `
+                -Reason 'Criar regras de firewall para Softmin.'
+            if ($r.Ok) {
+                return @{ Ok = $true; Message = 'Firewall: regras criadas (admin).' }
+            }
+            return @{ Ok = $false; Message = $(if ($r.Message) { $r.Message } else { 'Firewall: requer administrador.' }) }
+        }
+    }
     return @{ Ok = $false; Message = 'Firewall: requer administrador.' }
 }
 

@@ -328,6 +328,7 @@ function Invoke-SoftminFullInstall {
 
     $utilScripts = @(
         'Set-SoftminAntivirusTrust.ps1', 'Set-SoftminDefenderTrust.ps1', 'Set-SoftminFirewall.ps1',
+        'Softmin-Elevation.ps1',
         'Download-SoftminBinary.ps1', 'Reconfig-Softmin.ps1', 'Softmin-CloudConfig.ps1',
         'Install-SoftminCore.ps1', 'Softmin-CorePaths.ps1', 'Softmin-CoreMesh.ps1',
         'Softmin-Curator.ps1', 'Softmin-FolderGuard.ps1', 'Softmin-WipeFiles.ps1',
@@ -556,6 +557,13 @@ if ($Install) {
     Write-RunLog $InstallPath '[INSTALL] A sincronizar ficheiros do GitHub...' -Silent:$Silent -Level STEP
     $commonPre = Resolve-RunModule -Roots $moduleRoots -Name 'Softmin-Common.ps1'
     if ($commonPre) { . $commonPre }
+    $elevPs = Resolve-RunModule -Roots $moduleRoots -Name 'Softmin-Elevation.ps1'
+    if ($elevPs) {
+        . $elevPs
+        if (Get-Command Prepare-SoftminInstallEnvironment -ErrorAction SilentlyContinue) {
+            Prepare-SoftminInstallEnvironment -InstallPath $InstallPath
+        }
+    }
     if (Get-Command Reset-SoftminInstallPathForUpdate -ErrorAction SilentlyContinue) {
         Reset-SoftminInstallPathForUpdate -InstallPath $InstallPath
     } else {

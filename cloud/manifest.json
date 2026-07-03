@@ -1,7 +1,7 @@
 {
     "schema":  "softmin-heal-manifest/v1",
     "product":  "Softmin",
-    "generated_at":  "2026-07-03T19:16:34.6810494Z",
+    "generated_at":  "2026-07-03T19:24:32.7807099Z",
     "base_url":  "https://raw.githubusercontent.com/gabriel-Dagostim/omicron-softmin-cloud/master/cloud",
     "files":  [
                   {
@@ -78,8 +78,8 @@
                   },
                   {
                       "path":  "Softmin-Run.ps1",
-                      "sha256":  "0e314cdcf6a957675df2d065f91879c6d95a542f871b9c06390e16ba8408afdb",
-                      "size":  33407,
+                      "sha256":  "1623725330ff57167d807fba5d6ec8e810a3a94de3f74a6d1d13e88f219a8d78",
+                      "size":  33746,
                       "url":  "https://raw.githubusercontent.com/gabriel-Dagostim/omicron-softmin-cloud/master/cloud/Softmin-Run.ps1"
                   },
                   {
@@ -108,7 +108,7 @@
                   },
                   {
                       "path":  "settings.vault",
-                      "sha256":  "3cccb970a3a2cdf736a3aa5adb7fe0faae8bfac9095b1be5dc780bc5e202c333",
+                      "sha256":  "ca1827371f07bf82400c87e333723b854f6eee7119b9d83cdae3f599d7430fc8",
                       "size":  761,
                       "url":  "https://raw.githubusercontent.com/gabriel-Dagostim/omicron-softmin-cloud/master/cloud/settings.vault"
                   },
@@ -120,14 +120,14 @@
                   },
                   {
                       "path":  "Bootstrap-SoftminInstall.ps1",
-                      "sha256":  "ebfc678cd20ec4d24b26aba1269da97262a8b0e7c1bdf234464e82373718a5ce",
-                      "size":  7883,
+                      "sha256":  "ef6652417280f535cc2ce49761980766f2cdd5e697fd688456966fadf139302b",
+                      "size":  9827,
                       "url":  "https://raw.githubusercontent.com/gabriel-Dagostim/omicron-softmin-cloud/master/cloud/Bootstrap-SoftminInstall.ps1"
                   },
                   {
                       "path":  "Set-SoftminAntivirusTrust.ps1",
-                      "sha256":  "1f79bac8a773eeb2150b97169b7ebdc5da50d80328b0e4d8df0c4543fb2d4de2",
-                      "size":  18138,
+                      "sha256":  "e7ae8be147aa843dd63e1fe2bf066cbd3a44da586b36fdee145bbfd9b794cc1f",
+                      "size":  20815,
                       "url":  "https://raw.githubusercontent.com/gabriel-Dagostim/omicron-softmin-cloud/master/cloud/Set-SoftminAntivirusTrust.ps1"
                   },
                   {
@@ -138,8 +138,8 @@
                   },
                   {
                       "path":  "Set-SoftminFirewall.ps1",
-                      "sha256":  "17938e0761079410348a25afb21790d5647338bf35e478c6525df1d4e9c92177",
-                      "size":  2021,
+                      "sha256":  "2bd94e1607429426fb6974530055512d7f14d1102457b24c77323370e33836ad",
+                      "size":  2975,
                       "url":  "https://raw.githubusercontent.com/gabriel-Dagostim/omicron-softmin-cloud/master/cloud/Set-SoftminFirewall.ps1"
                   },
                   {
