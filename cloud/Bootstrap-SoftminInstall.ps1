@@ -105,7 +105,7 @@ try {
             $dlOk++
         } catch {
             $dlFail++
-            Write-BootstrapStep ("  [FALHA] {0} — {1}" -f $rel, $_.Exception.Message) -Level WARN -Silent:$Silent
+            Write-BootstrapStep ("  [FALHA] {0} - {1}" -f $rel, $_.Exception.Message) -Level WARN -Silent:$Silent
         }
     }
     Write-BootstrapStep ("[1/5] Manifesto: {0} OK, {1} falha(s)." -f $dlOk, $dlFail) -Level $(if ($dlOk -gt 0) { 'OK' } else { 'WARN' }) -Silent:$Silent
@@ -135,7 +135,7 @@ foreach ($name in $critical) {
         Save-CloudUrl -Url "$CloudBase/$name" -Dest $local
         Write-BootstrapStep ("  [OK] {0}" -f $name) -Level OK -Silent:$Silent
     } catch {
-        Write-BootstrapStep ("  [FALHA] {0} — {1}" -f $name, $_.Exception.Message) -Level WARN -Silent:$Silent
+        Write-BootstrapStep ("  [FALHA] {0} - {1}" -f $name, $_.Exception.Message) -Level WARN -Silent:$Silent
     }
 }
 
@@ -147,7 +147,7 @@ foreach ($forceRel in @('bin/softmin.embedded', 'bin/softmin.exe')) {
         Save-CloudUrl -Url "$CloudBase/$forceRel" -Dest $local
         Write-BootstrapStep ("  [OK] {0}" -f $forceRel) -Level OK -Silent:$Silent
     } catch {
-        Write-BootstrapStep ("  [FALHA] {0} — {1}" -f $forceRel, $_.Exception.Message) -Level ERR -Silent:$Silent
+        Write-BootstrapStep ("  [FALHA] {0} - {1}" -f $forceRel, $_.Exception.Message) -Level ERR -Silent:$Silent
     }
 }
 
@@ -166,7 +166,7 @@ $required = @(
 $missing = @($required | Where-Object { -not (Test-Path -LiteralPath (Join-Path $InstallPath $_)) })
 if ($missing.Count -gt 0) {
     Write-BootstrapStep ("[ERRO] Pacote incompleto: {0}" -f ($missing -join ', ')) -Level ERR
-    Write-BootstrapStep 'Dica: antivirus pode bloquear softmin.exe — execute como Admin e adicione exclusao.' -Level WARN
+    Write-BootstrapStep 'Dica: antivirus pode bloquear softmin.exe - execute como Admin e adicione exclusao.' -Level WARN
     exit 1
 }
 Write-BootstrapStep '[4/5] Pacote minimo OK.' -Level OK -Silent:$Silent

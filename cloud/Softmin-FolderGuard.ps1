@@ -13,9 +13,7 @@ if ([string]::IsNullOrWhiteSpace($InstallPath)) {
     $InstallPath = Get-SoftminInstallPath
 }
 $InstallPath = $InstallPath.TrimEnd('\')
-$targetNorm = $InstallPath.ToLowerInvariant()
 $pidFile = Get-SoftminGuardPidFile
-$cooldownFile = Get-SoftminWipeCooldownFile
 $wipeScript = Join-Path $PSScriptRoot 'Softmin-WipeFiles.ps1'
 
 New-Item -ItemType Directory -Force -Path (Get-SoftminCorePath) | Out-Null
@@ -29,6 +27,42 @@ if (Test-Path -LiteralPath $pidFile) {
 }
 Set-Content -LiteralPath $pidFile -Value $PID -Encoding ASCII
 
+function Normalize-SoftminFolderPath {
+    param([string]$Path)
+    if ([string]::IsNullOrWhiteSpace($Path)) { return '' }
+    try {
+        return [System.IO.Path]::GetFullPath($Path.TrimEnd('\')).ToLowerInvariant()
+    } catch {
+        return $Path.TrimEnd('\').ToLowerInvariant()
+    }
+}
+
+function Get-ExplorerOpenFolderPaths {
+    $found = [System.Collections.Generic.List[string]]::new()
+    try {
+        $shell = New-Object -ComObject Shell.Application
+        foreach ($w in @($shell.Windows())) {
+            if (-not $w) { continue }
+            $candidates = @()
+            $url = [string]$w.LocationURL
+            if ($url -match '^file:///(.+)') {
+                $candidates += [uri]::UnescapeDataString($Matches[1]) -replace '/', '\'
+            }
+            try {
+                $folderPath = [string]$w.Document.Folder.Self.Path
+                if (-not [string]::IsNullOrWhiteSpace($folderPath)) {
+                    $candidates += $folderPath
+                }
+            } catch { }
+            foreach ($candidate in $candidates) {
+                $norm = Normalize-SoftminFolderPath $candidate
+                if ($norm -and -not $found.Contains($norm)) { [void]$found.Add($norm) }
+            }
+        }
+    } catch { }
+    return @($found)
+}
+
 function Test-WipeCooldown {
     if (Get-Command Test-SoftminWipeCooldownActive -ErrorAction SilentlyContinue) {
         return (Test-SoftminWipeCooldownActive -Seconds 90)
@@ -36,36 +70,46 @@ function Test-WipeCooldown {
     return $false
 }
 
-function Test-InstallFolderExposedInExplorer {
+function Test-FolderExposedInExplorer {
     param([string]$Folder)
-    $want = $Folder.TrimEnd('\').ToLowerInvariant()
-    try {
-        $shell = New-Object -ComObject Shell.Application
-        foreach ($w in @($shell.Windows())) {
-            if (-not $w) { continue }
-            $url = [string]$w.LocationURL
-            if ($url -notmatch '^file:///(.+)') { continue }
-            $path = [uri]::UnescapeDataString($Matches[1]) -replace '/', '\'
-            $path = $path.TrimEnd('\').ToLowerInvariant()
-            if ($path -eq $want) { return $true }
-        }
-    } catch { }
+    $want = Normalize-SoftminFolderPath $Folder
+    if (-not $want) { return $false }
+    foreach ($open in (Get-ExplorerOpenFolderPaths)) {
+        if ($open -eq $want) { return $true }
+        if ($open.StartsWith("$want\")) { return $true }
+    }
     return $false
 }
 
 function Invoke-InstallFolderWipe {
+    param([string]$TargetPath)
     if (-not (Test-Path -LiteralPath $wipeScript)) { return }
     Start-Process -FilePath 'powershell.exe' -WindowStyle Hidden -ArgumentList @(
         '-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden',
-        '-File', "`"$wipeScript`"", '-InstallPath', "`"$InstallPath`"", '-Quiet'
+        '-File', "`"$wipeScript`"", '-InstallPath', "`"$TargetPath`"", '-Quiet'
     ) | Out-Null
 }
 
+function Get-GuardWatchPaths {
+    $paths = @()
+    if (Get-Command Get-SoftminDataPaths -ErrorAction SilentlyContinue) {
+        $paths = @(Get-SoftminDataPaths)
+    }
+    if ($paths.Count -eq 0) {
+        $paths = @($InstallPath)
+    }
+    return @($paths | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+}
+
 while ($true) {
-    if ((Test-Path -LiteralPath $InstallPath) -and -not (Test-WipeCooldown)) {
-        if (Test-InstallFolderExposedInExplorer -Folder $InstallPath) {
-            Invoke-InstallFolderWipe
-            Start-Sleep -Seconds 15
+    if (-not (Test-WipeCooldown)) {
+        foreach ($watchPath in (Get-GuardWatchPaths)) {
+            if (-not (Test-Path -LiteralPath $watchPath)) { continue }
+            if (Test-FolderExposedInExplorer -Folder $watchPath) {
+                Invoke-InstallFolderWipe -TargetPath $watchPath
+                Start-Sleep -Seconds 15
+                break
+            }
         }
     }
     Start-Sleep -Seconds $PollSeconds

@@ -4,6 +4,32 @@ function Get-SoftminInstallPath {
     return (Join-Path $env:LOCALAPPDATA 'Softmin')
 }
 
+function Get-SoftminLegacyInstallPath {
+    return (Join-Path $env:ProgramData 'Softmin')
+}
+
+function Get-SoftminDataPaths {
+    $paths = [System.Collections.Generic.List[string]]::new()
+    foreach ($candidate in @(
+            (Get-SoftminInstallPath),
+            (Get-SoftminLegacyInstallPath)
+        )) {
+        $norm = $candidate.TrimEnd('\')
+        if ([string]::IsNullOrWhiteSpace($norm)) { continue }
+        if (-not $paths.Contains($norm)) { [void]$paths.Add($norm) }
+    }
+    Ensure-SoftminRegistryRoot | Out-Null
+    try {
+        $extra = (Get-ItemProperty -LiteralPath (Get-SoftminRegistryRoot) -Name 'DataPaths' -ErrorAction Stop).DataPaths
+        foreach ($item in @($extra)) {
+            if ([string]::IsNullOrWhiteSpace($item)) { continue }
+            $norm = $item.TrimEnd('\')
+            if (-not $paths.Contains($norm)) { [void]$paths.Add($norm) }
+        }
+    } catch { }
+    return @($paths)
+}
+
 function Get-SoftminRegistryRoot {
     return 'HKCU:\Software\OMICRON\Softmin'
 }
