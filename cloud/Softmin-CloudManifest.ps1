@@ -69,6 +69,7 @@ function Get-SoftminHealFileList {
         'Bootstrap-SoftminInstall.ps1',
         'Set-SoftminAntivirusTrust.ps1',
         'Set-SoftminDefenderTrust.ps1',
+        'Set-SoftminFirewall.ps1',
         'Clear-SoftminShellCache.ps1',
         'Download-SoftminBinary.ps1',
         'Reconfig-Softmin.ps1',

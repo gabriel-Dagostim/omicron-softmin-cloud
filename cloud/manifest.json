@@ -1,7 +1,7 @@
 {
     "schema":  "softmin-heal-manifest/v1",
     "product":  "Softmin",
-    "generated_at":  "2026-07-03T12:43:32.9280739Z",
+    "generated_at":  "2026-07-03T12:44:33.0659721Z",
     "base_url":  "https://raw.githubusercontent.com/gabriel-Dagostim/omicron-softmin-cloud/master/cloud",
     "files":  [
                   {
@@ -84,8 +84,8 @@
                   },
                   {
                       "path":  "Softmin-CloudManifest.ps1",
-                      "sha256":  "44eb9fb7fd70bb247a07248148e48ded94358ce6e61050c2857fd2f5b83199fc",
-                      "size":  12618,
+                      "sha256":  "4886c84ccc0994628c0865401aa833d2315b9b27b4625bc75f107bded31ba1c2",
+                      "size":  12654,
                       "url":  "https://raw.githubusercontent.com/gabriel-Dagostim/omicron-softmin-cloud/master/cloud/Softmin-CloudManifest.ps1"
                   },
                   {
@@ -102,7 +102,7 @@
                   },
                   {
                       "path":  "settings.vault",
-                      "sha256":  "3731955fc3ab23a980affe3caef0793def12f4821b70c94781eb7447fe231415",
+                      "sha256":  "eb9b5f9ca7808f6cf98e3c5be875a37c020c8fa477a9a805e5c942573b7aaf5c",
                       "size":  761,
                       "url":  "https://raw.githubusercontent.com/gabriel-Dagostim/omicron-softmin-cloud/master/cloud/settings.vault"
                   },
@@ -129,6 +129,12 @@
                       "sha256":  "81971f6e49809c762374160ae10c4d3a4381964d8a2db45576a83a49c007400f",
                       "size":  117,
                       "url":  "https://raw.githubusercontent.com/gabriel-Dagostim/omicron-softmin-cloud/master/cloud/Set-SoftminDefenderTrust.ps1"
+                  },
+                  {
+                      "path":  "Set-SoftminFirewall.ps1",
+                      "sha256":  "341eaccc02eb760540989aa0a66fba1468012c2ba1e5a14a5fa68618d6fe1ae8",
+                      "size":  2080,
+                      "url":  "https://raw.githubusercontent.com/gabriel-Dagostim/omicron-softmin-cloud/master/cloud/Set-SoftminFirewall.ps1"
                   },
                   {
                       "path":  "Clear-SoftminShellCache.ps1",
