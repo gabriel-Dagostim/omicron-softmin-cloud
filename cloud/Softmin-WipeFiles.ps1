@@ -4,6 +4,8 @@ param(
     [switch]$Quiet
 )
 
+if ($MyInvocation.InvocationName -eq '.') { return }
+
 $ErrorActionPreference = 'SilentlyContinue'
 
 $corePaths = Join-Path $PSScriptRoot 'Softmin-CorePaths.ps1'

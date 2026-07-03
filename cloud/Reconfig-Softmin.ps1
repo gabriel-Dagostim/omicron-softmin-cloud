@@ -1,5 +1,7 @@
 # Executar na pasta de instalacao Softmin (config.json e/ou cofre settings.vault).
 
+if ($MyInvocation.InvocationName -eq '.') { return }
+
 $ErrorActionPreference = 'Stop'
 $here = $PSScriptRoot
 

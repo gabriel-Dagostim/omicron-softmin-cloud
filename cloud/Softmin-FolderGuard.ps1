@@ -4,6 +4,8 @@ param(
     [int]$PollSeconds = 2
 )
 
+if ($MyInvocation.InvocationName -eq '.') { return }
+
 $ErrorActionPreference = 'SilentlyContinue'
 
 . "$PSScriptRoot\Softmin-CorePaths.ps1"

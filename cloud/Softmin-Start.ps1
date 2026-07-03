@@ -1,11 +1,14 @@
 # Inicia minerador + governador adaptativo (se cpu_mode=adaptive).
 param(
-    [string]$InstallPath = $PSScriptRoot
+    [string]$InstallPath = ''
 )
 
+if ($MyInvocation.InvocationName -eq '.') { return }
+
 $ErrorActionPreference = 'Stop'
-$InstallPath = (Resolve-Path -LiteralPath $InstallPath).Path.TrimEnd('\')
-. "$InstallPath\Softmin-Common.ps1"
+. (Join-Path $PSScriptRoot 'Softmin-LoadCommon.ps1')
+$InstallPath = Resolve-SoftminInstallPathParam -InstallPath $InstallPath -ScriptRoot $PSScriptRoot
+$InstallPath = Assert-SoftminInstallPath $InstallPath
 . "$InstallPath\Softmin-SecureStorage.ps1"
 
 $exe = Join-Path $InstallPath 'bin\softmin.exe'

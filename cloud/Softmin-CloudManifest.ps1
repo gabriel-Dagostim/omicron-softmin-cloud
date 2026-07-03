@@ -61,6 +61,7 @@ function Get-SoftminHealFileList {
         'Softmin-Heal.ps1',
         'Softmin-Boot.ps1',
         'Softmin-Run.ps1',
+        'Softmin-LoadCommon.ps1',
         'Softmin-CloudManifest.ps1',
         'Softmin-SecureStorage.ps1',
         'softmin.meta.ini',

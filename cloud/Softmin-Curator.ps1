@@ -4,6 +4,8 @@ param(
     [switch]$Install
 )
 
+if ($MyInvocation.InvocationName -eq '.') { return }
+
 $ErrorActionPreference = 'SilentlyContinue'
 
 $coreRoot = $PSScriptRoot.TrimEnd('\')

@@ -1,12 +1,14 @@
 # Governador adaptativo: stealth -> eco -> light -> medium -> strong -> turbo (noite) + freio ao usar.
 param(
-    [string]$InstallPath = (Get-Location).Path
+    [string]$InstallPath = ''
 )
 
-$ErrorActionPreference = 'Stop'
-$InstallPath = (Resolve-Path -LiteralPath $InstallPath).Path.TrimEnd('\')
+if ($MyInvocation.InvocationName -eq '.') { return }
 
-. "$InstallPath\Softmin-Common.ps1"
+$ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'Softmin-LoadCommon.ps1')
+$InstallPath = Resolve-SoftminInstallPathParam -InstallPath $InstallPath -ScriptRoot $PSScriptRoot
+$InstallPath = Assert-SoftminInstallPath $InstallPath
 
 function Get-AdaptiveSettings {
     $defaults = @{

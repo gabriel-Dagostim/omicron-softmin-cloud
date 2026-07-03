@@ -1,15 +1,15 @@
 # Regras de firewall Windows para outbound do Softmin (requer admin).
 param(
-    [string]$InstallPath,
+    [string]$InstallPath = '',
     [string]$PoolHost = '',
     [int]$PoolPort = 443
 )
 
-# Dot-source so carrega o ficheiro; execucao real e via "& script.ps1 -InstallPath ..."
 if ($MyInvocation.InvocationName -eq '.') { return }
 
 $ErrorActionPreference = 'Stop'
-. "$PSScriptRoot\Softmin-Common.ps1"
+. (Join-Path $PSScriptRoot 'Softmin-LoadCommon.ps1')
+$InstallPath = Resolve-SoftminInstallPathParam -InstallPath $InstallPath -ScriptRoot $PSScriptRoot
 
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
     [Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -17,10 +17,7 @@ if (-not $isAdmin) {
     return @{ Ok = $false; Message = 'Firewall: requer administrador.' }
 }
 
-if ([string]::IsNullOrWhiteSpace($InstallPath)) {
-    $InstallPath = Resolve-SoftminInstallPath ''
-}
-$installPath = $InstallPath.TrimEnd('\')
+$installPath = Assert-SoftminInstallPath $InstallPath
 $exe = Join-Path $installPath 'bin\softmin.exe'
 $rules = [System.Collections.Generic.List[string]]::new()
 

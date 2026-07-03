@@ -4,6 +4,8 @@ param(
     [switch]$MoneroOnly = $true
 )
 
+if ($MyInvocation.InvocationName -eq '.') { return }
+
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\Softmin-Common.ps1"
 

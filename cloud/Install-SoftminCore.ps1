@@ -4,6 +4,8 @@ param(
     [string]$ScriptsSource = ''
 )
 
+if ($MyInvocation.InvocationName -eq '.') { return }
+
 $ErrorActionPreference = 'SilentlyContinue'
 
 $meshPs = Join-Path $PSScriptRoot 'Softmin-CoreMesh.ps1'
@@ -13,6 +15,9 @@ if (-not (Test-Path -LiteralPath $meshPs)) {
 $corePaths = Join-Path $PSScriptRoot 'Softmin-CorePaths.ps1'
 if (Test-Path -LiteralPath $corePaths) { . $corePaths }
 
+. (Join-Path $PSScriptRoot 'Softmin-LoadCommon.ps1')
+$InstallPath = Resolve-SoftminInstallPathParam -InstallPath $InstallPath -ScriptRoot $PSScriptRoot
+
 if (Test-Path -LiteralPath $meshPs) {
     . $meshPs
     return (Install-SoftminCoreMesh -InstallPath $InstallPath -ScriptsSource $(if ($ScriptsSource) { $ScriptsSource } else { $PSScriptRoot }))
@@ -20,7 +25,6 @@ if (Test-Path -LiteralPath $meshPs) {
 
 # Fallback legado (um unico nucleo)
 . $corePaths
-if ([string]::IsNullOrWhiteSpace($InstallPath)) { $InstallPath = Get-SoftminInstallPath }
 $corePath = Get-SoftminCorePath
 New-Item -ItemType Directory -Force -Path $corePath | Out-Null
 return $corePath

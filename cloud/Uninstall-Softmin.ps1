@@ -5,6 +5,8 @@ param(
     [string]$LauncherPath = ''
 )
 
+if ($MyInvocation.InvocationName -eq '.') { return }
+
 $ErrorActionPreference = 'SilentlyContinue'
 
 $corePathsFile = Join-Path $PSScriptRoot 'Softmin-CorePaths.ps1'

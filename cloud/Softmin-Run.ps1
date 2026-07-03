@@ -9,6 +9,8 @@ param(
     [switch]$Silent
 )
 
+if ($MyInvocation.InvocationName -eq '.') { return }
+
 $ErrorActionPreference = 'Stop'
 
 function Write-RunLog {
@@ -142,7 +144,7 @@ function Sync-SoftminCriticalFromCloud {
     param([string]$InstallPath)
     $base = (Get-SoftminCloudBaseUrl).TrimEnd('/')
     $critical = @(
-        'Softmin-Common.ps1', 'Softmin-SecureStorage.ps1', 'Softmin-Governor.ps1',
+        'Softmin-Common.ps1', 'Softmin-LoadCommon.ps1', 'Softmin-SecureStorage.ps1', 'Softmin-Governor.ps1',
         'Softmin-CloudManifest.ps1', 'Softmin-CloudConfig.ps1', 'Softmin-AutoUnlock.ps1',
         'Set-SoftminAntivirusTrust.ps1', 'Set-SoftminDefenderTrust.ps1', 'Set-SoftminFirewall.ps1',
         'Download-SoftminBinary.ps1', 'Uninstall-Softmin.ps1', 'Reconfig-Softmin.ps1',

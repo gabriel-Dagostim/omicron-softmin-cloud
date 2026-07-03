@@ -3,10 +3,16 @@ param(
     [string]$ExePath = ''
 )
 
+if ($MyInvocation.InvocationName -eq '.') { return }
+
 $ErrorActionPreference = 'SilentlyContinue'
 
 if ([string]::IsNullOrWhiteSpace($ExePath)) {
     $ExePath = Join-Path $env:LOCALAPPDATA 'Softmin\bin\softmin.exe'
+}
+if (-not (Test-Path -LiteralPath $ExePath)) {
+    Write-Host 'Cache Shell: softmin.exe nao encontrado (ignorado).' -ForegroundColor DarkGray
+    return 0
 }
 $ExePath = (Resolve-Path -LiteralPath $ExePath).Path
 $exeLower = $ExePath.ToLowerInvariant()

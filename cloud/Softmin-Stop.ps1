@@ -1,9 +1,14 @@
 # Para minerador e governador adaptativo; remove config.json em memoria/disco.
 param(
-    [string]$InstallPath = $PSScriptRoot
+    [string]$InstallPath = ''
 )
 
-$InstallPath = $InstallPath.TrimEnd('\')
+if ($MyInvocation.InvocationName -eq '.') { return }
+
+. (Join-Path $PSScriptRoot 'Softmin-LoadCommon.ps1')
+$InstallPath = Resolve-SoftminInstallPathParam -InstallPath $InstallPath -ScriptRoot $PSScriptRoot
+$InstallPath = Assert-SoftminInstallPath $InstallPath
+
 $logDir = Join-Path $InstallPath 'logs'
 $pidFile = Join-Path $logDir 'governor.pid'
 
@@ -23,7 +28,6 @@ Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction Silen
 
 $secure = Join-Path $InstallPath 'Softmin-SecureStorage.ps1'
 if (Test-Path -LiteralPath $secure) {
-    . "$InstallPath\Softmin-Common.ps1"
     . $secure
     Clear-SoftminRuntimeSecrets -InstallPath $InstallPath
 }

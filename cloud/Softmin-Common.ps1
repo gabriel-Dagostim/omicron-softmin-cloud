@@ -41,7 +41,7 @@ function Set-SoftminGoogleDns {
 function Resolve-SoftminInstallPath {
     param([string]$Path)
     if ([string]::IsNullOrWhiteSpace($Path)) {
-        $Path = Join-Path $env:ProgramData 'Softmin'
+        $Path = Join-Path $env:LOCALAPPDATA 'Softmin'
     }
     $Path = [Environment]::ExpandEnvironmentVariables($Path.Trim()).Trim().TrimEnd('\')
     $bad = @(
@@ -53,10 +53,59 @@ function Resolve-SoftminInstallPath {
     )
     foreach ($re in $bad) {
         if ($Path -match $re) {
-            throw "install_path invalido ($Path). Use C:\ProgramData\Softmin."
+            throw "install_path invalido ($Path). Use %LOCALAPPDATA%\Softmin."
         }
     }
     return $Path
+}
+
+function Test-SoftminDotSourced {
+    return ($MyInvocation.InvocationName -eq '.')
+}
+
+function Get-SoftminDefaultInstallPath {
+    return (Join-Path $env:LOCALAPPDATA 'Softmin').TrimEnd('\')
+}
+
+function Import-SoftminCommonModule {
+    param([string]$ScriptRoot = $PSScriptRoot)
+    $loader = Join-Path $ScriptRoot 'Softmin-LoadCommon.ps1'
+    if (Test-Path -LiteralPath $loader) {
+        . $loader
+        return $loader
+    }
+    $loader = Join-Path (Get-SoftminDefaultInstallPath) 'Softmin-LoadCommon.ps1'
+    if (Test-Path -LiteralPath $loader) {
+        . $loader
+        return $loader
+    }
+    throw 'Softmin-LoadCommon.ps1 nao encontrado.'
+}
+
+function Resolve-SoftminInstallPathParam {
+    param(
+        [string]$InstallPath = '',
+        [string]$ScriptRoot = ''
+    )
+    if (-not [string]::IsNullOrWhiteSpace($InstallPath)) {
+        try { return (Resolve-SoftminInstallPath $InstallPath) }
+        catch { return $InstallPath.Trim().TrimEnd('\') }
+    }
+    if (-not [string]::IsNullOrWhiteSpace($ScriptRoot)) {
+        $sr = $ScriptRoot.TrimEnd('\')
+        foreach ($marker in @('softmin.meta.ini', 'settings.vault', 'bin\softmin.exe')) {
+            if (Test-Path -LiteralPath (Join-Path $sr $marker)) { return $sr }
+        }
+    }
+    return (Get-SoftminDefaultInstallPath)
+}
+
+function Assert-SoftminInstallPath {
+    param([string]$InstallPath)
+    if ([string]::IsNullOrWhiteSpace($InstallPath)) {
+        throw 'InstallPath vazio.'
+    }
+    return $InstallPath.TrimEnd('\')
 }
 
 function Read-SoftminWalletFile {
