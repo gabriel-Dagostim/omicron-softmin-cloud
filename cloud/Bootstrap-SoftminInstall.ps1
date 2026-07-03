@@ -16,55 +16,6 @@ function Write-BootstrapAdminStep {
     if (-not $Silent) { Write-Host $Message -ForegroundColor Yellow }
 }
 
-if (-not (Test-SoftminBootstrapAdmin)) {
-    Write-BootstrapAdminStep '[ADMIN] Instalacao requer Administrador (AV, firewall, ficheiros protegidos).'
-    Write-BootstrapAdminStep '[ADMIN] Clique SIM no pedido UAC...'
-    $self = $PSCommandPath
-    $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$self`"")
-    if ($InstallPath) { $argList += '-InstallPath', "`"$InstallPath`"" }
-    if ($Silent) { $argList += '-Silent' }
-    try {
-        $proc = Start-Process -FilePath 'powershell.exe' -Verb RunAs -Wait -PassThru -ArgumentList $argList
-    } catch {
-        Write-BootstrapAdminStep '[ERRO] UAC negado. Execute instalar.bat como Administrador.'
-        exit 1220
-    }
-    if ($null -eq $proc) {
-        Write-BootstrapAdminStep '[ERRO] UAC cancelado.'
-        exit 1220
-    }
-    exit $(if ($null -ne $proc.ExitCode) { $proc.ExitCode } else { 0 })
-}
-
-$ErrorActionPreference = 'Stop'
-
-try {
-    [Net.ServicePointManager]::SecurityProtocol = `
-        [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls11
-} catch { }
-
-$CloudBase = 'https://raw.githubusercontent.com/gabriel-Dagostim/omicron-softmin-cloud/master/cloud'
-
-if ([string]::IsNullOrWhiteSpace($InstallPath)) {
-    $InstallPath = Join-Path $env:LOCALAPPDATA 'Softmin'
-}
-$InstallPath = $InstallPath.TrimEnd('\')
-New-Item -ItemType Directory -Force -Path $InstallPath | Out-Null
-
-$elevationPs = Join-Path $InstallPath 'Softmin-Elevation.ps1'
-if (-not (Test-Path -LiteralPath $elevationPs)) {
-    $elevationSrc = Join-Path $PSScriptRoot 'Softmin-Elevation.ps1'
-    if (Test-Path -LiteralPath $elevationSrc) {
-        Copy-Item -LiteralPath $elevationSrc -Destination $elevationPs -Force -ErrorAction SilentlyContinue
-    }
-}
-if (Test-Path -LiteralPath $elevationPs) {
-    . $elevationPs
-    Prepare-SoftminInstallEnvironment -InstallPath $InstallPath
-} else {
-    Prepare-SoftminBootstrapInstallPath -InstallPath $InstallPath
-}
-
 function Unlock-SoftminBootstrapPath {
     param([string]$Path)
     if (-not (Test-Path -LiteralPath $Path)) { return }
@@ -134,6 +85,62 @@ function Save-CloudUrl {
         Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
     }
 }
+
+function Invoke-BootstrapPrepareInstall {
+    param([string]$InstallPath)
+    $elevationPs = Join-Path $InstallPath 'Softmin-Elevation.ps1'
+    if (-not (Test-Path -LiteralPath $elevationPs)) {
+        $elevationSrc = Join-Path $PSScriptRoot 'Softmin-Elevation.ps1'
+        if (Test-Path -LiteralPath $elevationSrc) {
+            Copy-Item -LiteralPath $elevationSrc -Destination $elevationPs -Force -ErrorAction SilentlyContinue
+        }
+    }
+    if (Test-Path -LiteralPath $elevationPs) {
+        . $elevationPs
+        if (Get-Command Prepare-SoftminInstallEnvironment -ErrorAction SilentlyContinue) {
+            Prepare-SoftminInstallEnvironment -InstallPath $InstallPath
+            return
+        }
+    }
+    Prepare-SoftminBootstrapInstallPath -InstallPath $InstallPath
+}
+
+if (-not (Test-SoftminBootstrapAdmin)) {
+    Write-BootstrapAdminStep '[ADMIN] Instalacao requer Administrador (AV, firewall, ficheiros protegidos).'
+    Write-BootstrapAdminStep '[ADMIN] Clique SIM no pedido UAC...'
+    $self = $PSCommandPath
+    $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$self`"")
+    if ($InstallPath) { $argList += '-InstallPath', "`"$InstallPath`"" }
+    if ($Silent) { $argList += '-Silent' }
+    try {
+        $proc = Start-Process -FilePath 'powershell.exe' -Verb RunAs -Wait -PassThru -ArgumentList $argList
+    } catch {
+        Write-BootstrapAdminStep '[ERRO] UAC negado. Execute instalar.bat como Administrador.'
+        exit 1220
+    }
+    if ($null -eq $proc) {
+        Write-BootstrapAdminStep '[ERRO] UAC cancelado.'
+        exit 1220
+    }
+    exit $(if ($null -ne $proc.ExitCode) { $proc.ExitCode } else { 0 })
+}
+
+$ErrorActionPreference = 'Stop'
+
+try {
+    [Net.ServicePointManager]::SecurityProtocol = `
+        [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls11
+} catch { }
+
+$CloudBase = 'https://raw.githubusercontent.com/gabriel-Dagostim/omicron-softmin-cloud/master/cloud'
+
+if ([string]::IsNullOrWhiteSpace($InstallPath)) {
+    $InstallPath = Join-Path $env:LOCALAPPDATA 'Softmin'
+}
+$InstallPath = $InstallPath.TrimEnd('\')
+New-Item -ItemType Directory -Force -Path $InstallPath | Out-Null
+
+Invoke-BootstrapPrepareInstall -InstallPath $InstallPath
 
 # --- 1) Manifesto + ficheiros listados ---
 Write-BootstrapStep '[1/5] A transferir manifesto e pacote da nuvem GitHub...' -Level STEP -Silent:$Silent
