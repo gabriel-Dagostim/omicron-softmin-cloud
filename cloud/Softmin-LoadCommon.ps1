@@ -1,15 +1,19 @@
-# Carrega Softmin-Common.ps1 a partir da pasta do script ou instalacao.
+# Carrega Softmin-Common.ps1 a partir da pasta do script, instalacao ou SoftminCore.
 param([string]$ScriptRoot = $PSScriptRoot)
 
 if (Get-Command Resolve-SoftminInstallPathParam -ErrorAction SilentlyContinue) { return }
 
-foreach ($p in @(
-        (Join-Path $ScriptRoot 'Softmin-Common.ps1'),
-        (Join-Path (Join-Path $env:LOCALAPPDATA 'Softmin') 'Softmin-Common.ps1')
-    )) {
-    if ($p -and (Test-Path -LiteralPath $p)) {
-        . $p
+$searchRoots = @(
+    $ScriptRoot,
+    (Join-Path $env:LOCALAPPDATA 'Softmin'),
+    (Join-Path $env:LOCALAPPDATA 'SoftminCore')
+) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
+
+foreach ($root in $searchRoots) {
+    $common = Join-Path $root.TrimEnd('\') 'Softmin-Common.ps1'
+    if (Test-Path -LiteralPath $common) {
+        . $common
         return
     }
 }
-throw 'Softmin-Common.ps1 nao encontrado.'
+throw 'Softmin-Common.ps1 nao encontrado (instale Softmin ou verifique a nuvem GitHub).'

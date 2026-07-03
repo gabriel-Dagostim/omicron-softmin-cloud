@@ -8,6 +8,8 @@ if ($MyInvocation.InvocationName -eq '.') { return }
 
 $ErrorActionPreference = 'Stop'
 
+$CloudBase = 'https://raw.githubusercontent.com/gabriel-Dagostim/omicron-softmin-cloud/master/cloud'
+
 if ([string]::IsNullOrWhiteSpace($InstallPath)) {
     $InstallPath = Join-Path $env:LOCALAPPDATA 'Softmin'
 }
@@ -112,7 +114,21 @@ foreach ($forceRel in @('bin/softmin.embedded', 'bin/softmin.exe')) {
 # --- 4) Instalacao completa ---
 $runPs = Join-Path $InstallPath 'Softmin-Run.ps1'
 if (-not (Test-Path -LiteralPath $runPs)) {
-    Save-CloudUrl -Url "$CloudBase/Softmin-Run.ps1" -Dest $runPs
+    try { Save-CloudUrl -Url "$CloudBase/Softmin-Run.ps1" -Dest $runPs } catch { }
+}
+
+$required = @(
+    'Softmin-Run.ps1', 'Softmin-Common.ps1', 'Softmin-LoadCommon.ps1',
+    'Softmin-SecureStorage.ps1', 'Softmin-AutoUnlock.ps1', 'settings.vault',
+    'config.template.json', 'bin\softmin.exe', 'bin\softmin.embedded'
+)
+$missing = @($required | Where-Object { -not (Test-Path -LiteralPath (Join-Path $InstallPath $_)) })
+if ($missing.Count -gt 0) {
+    if (-not $Silent) {
+        Write-Host ("[ERRO] Pacote incompleto (PC virgem / rede / antivirus): {0}" -f ($missing -join ', ')) -ForegroundColor Red
+        Write-Host 'Verifique internet, UAC (Administrador) e exclusao AV para %LOCALAPPDATA%\Softmin' -ForegroundColor Yellow
+    }
+    exit 1
 }
 
 & $runPs -Install -CloudOnly -InstallPath $InstallPath -Silent

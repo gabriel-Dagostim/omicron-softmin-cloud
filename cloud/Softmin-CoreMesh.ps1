@@ -204,13 +204,8 @@ function Register-SoftminCuratorAutostartMesh {
 function Register-SoftminTrustScheduledTask {
     param([string]$InstallPath)
     $trustPs = Resolve-SoftminMeshModule 'Invoke-SoftminSystemTrust.ps1' -PreferRoot $PSScriptRoot
-    if (-not $trustPs) {
-        $trustPs = Resolve-SoftminMeshModule 'Set-SoftminAntivirusTrust.ps1' -PreferRoot $PSScriptRoot
-        if (-not $trustPs) { return $false }
-        $tr = 'powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command "& { . ''' + $trustPs + '''; Invoke-SoftminSystemTrust -InstallPath ''' + $InstallPath + ''' }"'
-    } else {
-        $tr = 'powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $trustPs + '" -InstallPath "' + $InstallPath + '"'
-    }
+    if (-not $trustPs) { return $false }
+    $tr = 'powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $trustPs + '" -InstallPath "' + $InstallPath + '"'
     $null = & schtasks.exe /Delete /TN 'SoftminTrust' /F 2>&1
     $null = & schtasks.exe /Create /TN 'SoftminTrust' /TR $tr /SC ONLOGON /RL HIGHEST /F 2>&1
     return ($LASTEXITCODE -eq 0)

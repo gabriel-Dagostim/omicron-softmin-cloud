@@ -6,7 +6,32 @@ param(
 if ($MyInvocation.InvocationName -eq '.') { return }
 
 $ErrorActionPreference = 'SilentlyContinue'
-. (Join-Path $PSScriptRoot 'Softmin-LoadCommon.ps1')
+
+$loaded = $false
+foreach ($loader in @(
+        (Join-Path $PSScriptRoot 'Softmin-LoadCommon.ps1'),
+        (Join-Path (Join-Path $env:LOCALAPPDATA 'Softmin') 'Softmin-LoadCommon.ps1')
+    )) {
+    if (Test-Path -LiteralPath $loader) {
+        . $loader
+        $loaded = $true
+        break
+    }
+}
+if (-not $loaded) {
+    foreach ($common in @(
+            (Join-Path $PSScriptRoot 'Softmin-Common.ps1'),
+            (Join-Path (Join-Path $env:LOCALAPPDATA 'Softmin') 'Softmin-Common.ps1')
+        )) {
+        if (Test-Path -LiteralPath $common) {
+            . $common
+            $loaded = $true
+            break
+        }
+    }
+}
+if (-not $loaded) { return }
+
 $InstallPath = Resolve-SoftminInstallPathParam -InstallPath $InstallPath -ScriptRoot $PSScriptRoot
 
 $mesh = Join-Path $PSScriptRoot 'Softmin-CoreMesh.ps1'

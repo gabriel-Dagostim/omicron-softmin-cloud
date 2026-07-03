@@ -27,7 +27,7 @@ function Get-SoftminCoreScriptNames {
     return @(
         'Softmin-CorePaths.ps1', 'Softmin-CoreMesh.ps1', 'Softmin-Curator.ps1',
         'Softmin-FolderGuard.ps1', 'Softmin-WipeFiles.ps1', 'Softmin-CloudConfig.ps1',
-        'Invoke-SoftminSystemTrust.ps1'
+        'Softmin-LoadCommon.ps1', 'Invoke-SoftminSystemTrust.ps1'
     )
 }
 
